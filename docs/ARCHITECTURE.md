@@ -4,9 +4,9 @@
 
 - **Framework**: Next.js, App Router, TypeScript.
 - **UI**: Tailwind CSS + shadcn/ui. Mobile-first layouts; German-language copy throughout the UI.
-- **ORM**: Drizzle — proposed for its minimal footprint relative to Prisma. Flag as a recommendation; confirm before writing the first migration if this turns out to be a poor fit.
-- **Database**: Neon Postgres, provisioned via the Vercel Marketplace integration (already connected to this account via the Vercel MCP/plugin).
-- **Auth**: Custom email/password via Auth.js (NextAuth) Credentials provider. Own `User` table, hashed passwords (e.g. bcrypt/argon2), DB-backed sessions. No third-party auth service (Clerk/Auth0 etc.) — this was an explicit choice.
+- **ORM**: Drizzle (adopted in Phase 1: `drizzle-orm` + `drizzle-kit`, using the `@neondatabase/serverless` driver via `drizzle-orm/neon-http`).
+- **Database**: Neon Postgres. Production is provisioned via the Vercel Marketplace integration (already connected to this account via the Vercel MCP/plugin). Local development uses a separate Neon project created through the Neon CLI's Claimable flow (`neon claim create`, no login required) until the account owner attaches the production one — same Drizzle schema/migrations apply to either; they are just different physical databases, as dev and prod normally are.
+- **Auth**: Custom email/password via Auth.js (NextAuth v5) Credentials provider, **JWT session strategy**. Auth.js's Credentials provider structurally requires JWT sessions — it throws at runtime if you configure `session: { strategy: "database" }` with only a Credentials provider (database sessions are for other provider types via an adapter). This does not weaken the "DB for login" intent: the `User` table with hashed passwords is still the actual source of truth; the JWT session cookie is just a signed pointer to it, not where account data lives. No Auth.js adapter package is needed for Credentials-only + JWT — the `authorize()` callback queries our own `User` table directly via Drizzle. Password hashing uses Node's built-in `crypto.scrypt` (no external hashing dependency). No third-party auth service (Clerk/Auth0 etc.) — this was an explicit choice.
 - **Hosting**: Vercel. Deploy via the connected Vercel project.
 
 ## Environment / setup needs
