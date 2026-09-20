@@ -1,3 +1,5 @@
+@AGENTS.md
+
 # handball-stats
 
 Mobile-first handball statistics tracker for a single team, hosted on Vercel. Full product spec lives in `docs/`:
