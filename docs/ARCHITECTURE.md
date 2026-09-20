@@ -14,7 +14,7 @@
 - Vercel project created and linked to this repo.
 - Neon integration attached to the project → `DATABASE_URL` env var populated automatically.
 - An Auth.js secret env var (`AUTH_SECRET` or equivalent) set in Vercel project settings.
-- These are provisioned through the already-connected Vercel plugin/MCP tools — no manual dashboard steps should be needed.
+- **Correction learned in Phase 0**: the connected Vercel MCP/plugin token is deliberately restricted from two things — linking a Vercel project to a GitHub repo (the GitHub App authorization is an interactive consent step) and installing/accepting terms for a Marketplace integration like Neon (a billing-consent step). Both need to be done once by the account owner, via the Vercel dashboard or an authenticated `vercel` CLI session — not automatable from here. Everything else (project creation, env vars, deployments once Git is linked) works through the MCP tools.
 
 ## Offline / live-entry strategy
 
