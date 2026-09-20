@@ -8,6 +8,13 @@
       "when": 1789929995609,
       "tag": "0000_fresh_iron_fist",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1789933056355,
+      "tag": "0001_daily_yellow_claw",
+      "breakpoints": true
     }
   ]
 }
