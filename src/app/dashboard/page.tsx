@@ -1,21 +1,23 @@
-import { eq } from "drizzle-orm";
+import Link from "next/link";
 import { redirect } from "next/navigation";
-import { auth, signOut } from "@/auth";
-import { db } from "@/db";
-import { teams } from "@/db/schema";
+import { signOut } from "@/auth";
+import { getCurrentTeam } from "@/lib/team";
 
 export default async function DashboardPage() {
-  const session = await auth();
-  if (!session?.user) redirect("/login");
-
-  const [team] = await db
-    .select({ name: teams.name })
-    .from(teams)
-    .where(eq(teams.userId, session.user.id));
+  const team = await getCurrentTeam();
+  if (!team) redirect("/login");
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center gap-6 px-4 text-center">
-      <h1 className="text-2xl font-semibold tracking-tight">{team?.name ?? "Team"}</h1>
+      <h1 className="text-2xl font-semibold tracking-tight">{team.name}</h1>
+      <nav className="flex flex-col gap-3">
+        <Link href="/roster" className="underline">
+          Kader
+        </Link>
+        <Link href="/seasons" className="underline">
+          Saisons
+        </Link>
+      </nav>
       <form
         action={async () => {
           "use server";
