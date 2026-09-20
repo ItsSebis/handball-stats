@@ -1,9 +1,10 @@
 "use server";
 
+import { eq } from "drizzle-orm";
+import { signIn } from "@/auth";
 import { db } from "@/db";
 import { teams, users } from "@/db/schema";
 import { hashPassword } from "@/lib/password";
-import { signIn } from "@/auth";
 
 export async function signup(_prevState: string | undefined, formData: FormData) {
   const teamName = String(formData.get("teamName") ?? "").trim();
@@ -18,13 +19,21 @@ export async function signup(_prevState: string | undefined, formData: FormData)
 
   const passwordHash = await hashPassword(password);
 
+  // drizzle-orm/neon-http does not support db.transaction(); insert
+  // sequentially and roll back the user manually if the team insert fails.
+  let userId: string;
   try {
-    await db.transaction(async (tx) => {
-      const [user] = await tx.insert(users).values({ email, passwordHash }).returning();
-      await tx.insert(teams).values({ userId: user.id, name: teamName });
-    });
+    const [user] = await db.insert(users).values({ email, passwordHash }).returning();
+    userId = user.id;
   } catch {
     return "Diese E-Mail-Adresse wird bereits verwendet.";
+  }
+
+  try {
+    await db.insert(teams).values({ userId, name: teamName });
+  } catch {
+    await db.delete(users).where(eq(users.id, userId));
+    return "Team konnte nicht erstellt werden. Bitte erneut versuchen.";
   }
 
   await signIn("credentials", { email, password, redirectTo: "/dashboard" });

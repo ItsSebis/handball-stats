@@ -8,7 +8,10 @@ export default async function DashboardPage() {
   const session = await auth();
   if (!session?.user) redirect("/login");
 
-  const [team] = await db.select().from(teams).where(eq(teams.userId, session.user.id));
+  const [team] = await db
+    .select({ name: teams.name })
+    .from(teams)
+    .where(eq(teams.userId, session.user.id));
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center gap-6 px-4 text-center">

@@ -14,12 +14,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         email: {},
         password: {},
       },
-      authorize: async (credentials) => {
-        const email = credentials?.email;
-        const password = credentials?.password;
+      authorize: async ({ email, password }) => {
         if (typeof email !== "string" || typeof password !== "string") return null;
+        const normalizedEmail = email.trim().toLowerCase();
 
-        const [user] = await db.select().from(users).where(eq(users.email, email));
+        const [user] = await db.select().from(users).where(eq(users.email, normalizedEmail));
         if (!user) return null;
 
         const valid = await verifyPassword(password, user.passwordHash);
@@ -35,7 +34,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       return token;
     },
     session({ session, token }) {
-      if (session.user) session.user.id = token.id as string;
+      if (session.user && token.id) session.user.id = token.id as string;
       return session;
     },
   },
