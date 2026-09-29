@@ -6,9 +6,21 @@ Entity names and fields below are a proposal for the schema (e.g. Drizzle table 
 - `id`
 - `email` (unique)
 - `passwordHash`
+- `role`: `COACH` | `ADMIN` (default `COACH`)
+- `emailVerifiedAt` (nullable timestamp)
 - `createdAt`
 
-One-to-one with `Team`.
+One-to-one with `Team` for `COACH` users. `ADMIN` users have no `Team`.
+
+## `AuthToken`
+- `id`
+- `userId` → `User.id`
+- `type`: `EMAIL_VERIFICATION` | `PASSWORD_RESET`
+- `token` (unique, random)
+- `expiresAt`
+- `usedAt` (nullable)
+
+Single-use link token backing both the signup confirmation email and the self-service password-reset email (Phase 9).
 
 ## `Team`
 - `id`

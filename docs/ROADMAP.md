@@ -53,8 +53,22 @@ Build order. Each phase is a **major, working milestone** the next phase builds 
 ## Phase 7 — Deferred polish
 
 Only after phases 0–6 are solid and in real use. Resolve items from `OPEN_QUESTIONS.md` as they become actually relevant — not preemptively:
-- Password-reset flow.
 - Chart-type refinement.
 - Install-prompt UX.
 - Stat-entry correction/undo.
 - Any other item from `OPEN_QUESTIONS.md` the user raises.
+
+## Phase 8 — Admin tooling
+
+- Schema: `role` on `User` (`COACH` | `ADMIN`, per `DATA_MODEL.md`).
+- Separate admin login (same Credentials-based auth, gated by `role = ADMIN`).
+- Admin dashboard: list coach accounts, edit a user's details, reset a user's password directly (admin sets a new password; no email flow).
+- **Milestone**: an admin can log in separately from any coach, see all coach accounts, and edit a user's details or reset their password directly, as a support fallback.
+
+## Phase 9 — Transactional email (Resend)
+
+- Schema: `AuthToken` (per `DATA_MODEL.md`), `emailVerifiedAt` on `User`.
+- Resend integration (`RESEND_API_KEY`, domain already verified by the account owner).
+- Signup sends a confirmation email with a verification link.
+- "Forgot password" flow: coach requests a reset email, follows a single-use link, sets a new password.
+- **Milestone**: a coach receives a real confirmation email on signup, and can self-serve a password reset by email without the admin's help — the admin-driven reset from Phase 8 remains as a fallback.
