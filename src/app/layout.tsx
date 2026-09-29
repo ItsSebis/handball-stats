@@ -1,6 +1,7 @@
 import { SerwistProvider } from "@serwist/turbopack/react";
 import type { Metadata } from "next";
 import { Geist } from "next/font/google";
+import { InstallPrompt } from "@/components/install-prompt";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -17,7 +18,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="de" className={`${geistSans.variable} antialiased`}>
       <body>
-        <SerwistProvider swUrl="/serwist/sw.js">{children}</SerwistProvider>
+        <SerwistProvider swUrl="/serwist/sw.js">
+          <InstallPrompt />
+          {children}
+        </SerwistProvider>
       </body>
     </html>
   );
