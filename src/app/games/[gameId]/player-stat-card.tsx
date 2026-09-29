@@ -93,8 +93,8 @@ export function PlayerStatCard({
     setError(null);
     startTransition(async () => {
       try {
-        await recordEvent(gameParticipationId, event);
-        setLastEvent(event);
+        const applied = await recordEvent(gameParticipationId, event);
+        if (applied) setLastEvent(event);
       } catch (err) {
         console.error("recordEvent failed", err);
         setError("Ereignis konnte nicht gespeichert werden.");
@@ -191,7 +191,12 @@ export function PlayerStatCard({
       )}
 
       {lastEvent && (
-        <button type="button" disabled={disabled} onClick={handleUndo} className="text-left text-sm underline disabled:opacity-50">
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={handleUndo}
+          className="text-left text-sm underline disabled:opacity-50"
+        >
           Rückgängig: {EVENT_LABELS[lastEvent]}
         </button>
       )}

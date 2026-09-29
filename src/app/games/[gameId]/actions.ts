@@ -58,7 +58,7 @@ function isCardEvent(event: StatEvent): event is CardEvent {
 }
 
 // Re-derives team/type/closed state from the DB; never trusts the client. Null if not writable now.
-async function resolveWritableEvent(gameParticipationId: string, event: StatEvent) {
+async function resolveWritableParticipation(gameParticipationId: string, event: StatEvent) {
   const team = await getCurrentTeam();
   if (!team) return null;
   if (!isUuid(gameParticipationId)) return null;
@@ -88,6 +88,7 @@ async function resolveWritableEvent(gameParticipationId: string, event: StatEven
   if (disciplineHidden && (isCardEvent(event) || event === "TWO_MIN_PENALTY")) return null;
 
   if (!isCardEvent(event)) {
+    // COUNTER_EVENTS is a total Record, so this only guards a bad event string from a raw client call.
     const config = COUNTER_EVENTS[event];
     if (!config) return null;
     if (config.playerType && config.playerType !== participation.playerType) return null;
@@ -96,34 +97,45 @@ async function resolveWritableEvent(gameParticipationId: string, event: StatEven
   return { gameId: participation.gameId };
 }
 
-export async function recordEvent(gameParticipationId: string, event: StatEvent) {
-  const resolved = await resolveWritableEvent(gameParticipationId, event);
-  if (!resolved) return;
+// Returns whether the event actually changed anything, so the caller can decide it's now undoable.
+export async function recordEvent(gameParticipationId: string, event: StatEvent): Promise<boolean> {
+  const participation = await resolveWritableParticipation(gameParticipationId, event);
+  if (!participation) return false;
 
-  let insertValues: Record<string, number | boolean>;
-  let updateSet: Record<string, unknown>;
+  let applied: boolean;
 
   if (isCardEvent(event)) {
     const column = CARD_EVENTS[event];
-    insertValues = { [column]: true };
-    updateSet = { [column]: true };
+    const rows = await db
+      .insert(playerGameStats)
+      .values({ gameParticipationId, [column]: true })
+      .onConflictDoUpdate({
+        target: playerGameStats.gameParticipationId,
+        set: { [column]: true },
+        setWhere: eq(playerGameStats[column], false),
+      })
+      .returning({ id: playerGameStats.gameParticipationId });
+    applied = rows.length > 0;
   } else {
     const { columns } = COUNTER_EVENTS[event];
-    insertValues = Object.fromEntries(columns.map((column) => [column, 1]));
-    updateSet = Object.fromEntries(columns.map((column) => [column, sql`${playerGameStats[column]} + 1`]));
+    const insertValues = Object.fromEntries(columns.map((column) => [column, 1]));
+    const updateSet = Object.fromEntries(
+      columns.map((column) => [column, sql`${playerGameStats[column]} + 1`]),
+    );
+    await db
+      .insert(playerGameStats)
+      .values({ gameParticipationId, ...insertValues })
+      .onConflictDoUpdate({ target: playerGameStats.gameParticipationId, set: updateSet });
+    applied = true;
   }
 
-  await db
-    .insert(playerGameStats)
-    .values({ gameParticipationId, ...insertValues })
-    .onConflictDoUpdate({ target: playerGameStats.gameParticipationId, set: updateSet });
-
-  revalidatePath(`/games/${resolved.gameId}`);
+  if (applied) revalidatePath(`/games/${participation.gameId}`);
+  return applied;
 }
 
 export async function undoEvent(gameParticipationId: string, event: StatEvent) {
-  const resolved = await resolveWritableEvent(gameParticipationId, event);
-  if (!resolved) return;
+  const participation = await resolveWritableParticipation(gameParticipationId, event);
+  if (!participation) return;
 
   let updateSet: Record<string, unknown>;
 
@@ -142,7 +154,7 @@ export async function undoEvent(gameParticipationId: string, event: StatEvent) {
     .set(updateSet)
     .where(eq(playerGameStats.gameParticipationId, gameParticipationId));
 
-  revalidatePath(`/games/${resolved.gameId}`);
+  revalidatePath(`/games/${participation.gameId}`);
 }
 
 export async function closeGame(_prevState: string | undefined, formData: FormData) {

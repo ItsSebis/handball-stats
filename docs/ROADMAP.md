@@ -33,6 +33,7 @@ Build order. Each phase is a **major, working milestone** the next phase builds 
 
 - Schema: `PlayerGameStat`.
 - Per-player stat entry UI: regular/7m shots+goals (field players), regular/7m shots-faced+saves (keepers), 2-min/yellow/red (per `FEATURES.md` #4).
+- Per-player "undo last event" for correcting a mis-tap.
 - Closing a game with the final score.
 - No offline handling yet — assume connectivity.
 - **Milestone**: a coach can fully record and close out a real game's stats while online.
@@ -55,7 +56,7 @@ Build order. Each phase is a **major, working milestone** the next phase builds 
 Only after phases 0–6 are solid and in real use. Resolve items from `OPEN_QUESTIONS.md` as they become actually relevant — not preemptively:
 - Chart-type refinement.
 - Install-prompt UX.
-- Stat-entry correction/undo.
+- Full stat-entry correction/edit screen (beyond the per-player undo-last already in Phase 4).
 - Any other item from `OPEN_QUESTIONS.md` the user raises.
 
 ## Phase 8 — Admin tooling
