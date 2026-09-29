@@ -81,6 +81,7 @@ export default async function GameDetailPage({ params }: { params: Promise<{ gam
   const eventLog: GameEventLogEntry[] = await db
     .select({
       id: playerGameStatEvents.id,
+      gameParticipationId: playerGameStatEvents.gameParticipationId,
       eventType: playerGameStatEvents.eventType,
       undone: playerGameStatEvents.undone,
       createdAt: playerGameStatEvents.createdAt,
@@ -108,13 +109,14 @@ export default async function GameDetailPage({ params }: { params: Promise<{ gam
             <details className="text-sm">
               <summary className="cursor-pointer text-muted-foreground">Verlauf anzeigen</summary>
               <div className="mt-2">
-                <EventLog entries={eventLog} closed />
+                <EventLog entries={eventLog} />
               </div>
             </details>
           </div>
         ) : (
           <>
             <LiveGameView
+              gameId={game.id}
               fieldPlayers={fieldPlayers}
               keepers={keepers}
               showDiscipline={showDiscipline}

@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { recordEvent, type StatEvent } from "./actions";
+import type { StatEvent } from "./event-effects";
 import type { Participant } from "./participant";
 import { PlayerPickerOverlay, type PickerEligiblePlayer } from "./player-picker-overlay";
 
@@ -52,14 +52,12 @@ function ActionGroup({
   actions,
   participants,
   columns,
-  disabled,
   onPick,
 }: {
   title: string;
   actions: Action[];
   participants: Participant[];
   columns: 2 | 3;
-  disabled: boolean;
   onPick: (label: string, event: StatEvent, participants: Participant[]) => void;
 }) {
   if (participants.length === 0) return null;
@@ -75,7 +73,6 @@ function ActionGroup({
             key={action.event}
             type="button"
             variant="outline"
-            disabled={disabled}
             className="h-auto py-3"
             onClick={() => onPick(action.label, action.event, participants)}
           >
@@ -91,17 +88,16 @@ export function ActionButtons({
   fieldPlayers,
   keepers,
   showDiscipline,
+  onRecordEvent,
 }: {
   fieldPlayers: Participant[];
   keepers: Participant[];
   showDiscipline: boolean;
+  onRecordEvent: (gameParticipationId: string, event: StatEvent) => void;
 }) {
   const [activePicker, setActivePicker] = useState<ActivePicker | null>(null);
-  const [isPending, startTransition] = useTransition();
-  const [error, setError] = useState<string | null>(null);
 
   function openPicker(label: string, event: StatEvent, participants: Participant[]) {
-    setError(null);
     setActivePicker({ title: `${label} – wer?`, eventType: event, players: toEligible(participants, event) });
   }
 
@@ -109,46 +105,22 @@ export function ActionButtons({
     if (!activePicker) return;
     const { eventType } = activePicker;
     setActivePicker(null);
-    startTransition(async () => {
-      const result = await recordEvent(player.gameParticipationId, eventType);
-      if (!result.ok) {
-        setError(
-          result.reason === "no_op" ? "Ereignis war bereits erfasst." : "Ereignis konnte nicht gespeichert werden.",
-        );
-      }
-    });
+    onRecordEvent(player.gameParticipationId, eventType);
   }
 
   return (
     <div className="flex flex-col gap-3">
-      <ActionGroup
-        title="Feldspieler"
-        actions={FIELD_ACTIONS}
-        participants={fieldPlayers}
-        columns={2}
-        disabled={isPending}
-        onPick={openPicker}
-      />
-      <ActionGroup
-        title="Torhüter"
-        actions={KEEPER_ACTIONS}
-        participants={keepers}
-        columns={2}
-        disabled={isPending}
-        onPick={openPicker}
-      />
+      <ActionGroup title="Feldspieler" actions={FIELD_ACTIONS} participants={fieldPlayers} columns={2} onPick={openPicker} />
+      <ActionGroup title="Torhüter" actions={KEEPER_ACTIONS} participants={keepers} columns={2} onPick={openPicker} />
       {showDiscipline && (
         <ActionGroup
           title="Disziplin"
           actions={DISCIPLINE_ACTIONS}
           participants={[...fieldPlayers, ...keepers]}
           columns={3}
-          disabled={isPending}
           onPick={openPicker}
         />
       )}
-
-      {error && <p className="text-sm text-destructive">{error}</p>}
 
       <PlayerPickerOverlay
         open={activePicker !== null}

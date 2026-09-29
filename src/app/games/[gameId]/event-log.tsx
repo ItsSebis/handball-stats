@@ -1,51 +1,42 @@
 "use client";
 
-import { useState } from "react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatRelativeTime } from "@/lib/format-relative-time";
 import { getInitials } from "@/lib/player-initials";
-import { undoEventById, type StatEvent } from "./actions";
+import type { StatEvent } from "./event-effects";
 import { EVENT_LABELS } from "./event-labels";
 
 export type GameEventLogEntry = {
   id: string;
+  gameParticipationId: string;
   playerName: string;
   eventType: StatEvent;
   createdAt: Date;
   undone: boolean;
+  pending?: boolean;
 };
 
-export function EventLog({ entries, closed }: { entries: GameEventLogEntry[]; closed: boolean }) {
-  // A Set, not a single id: undoing row A must not re-enable row B's button while B is still in
-  // flight (and vice versa) if the coach taps undo on two different rows in quick succession.
-  const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
-  const [error, setError] = useState<string | null>(null);
-
-  function handleUndo(id: string) {
-    setError(null);
-    setPendingIds((prev) => new Set(prev).add(id));
-    void (async () => {
-      const result = await undoEventById(id);
-      if (!result.ok) {
-        setError(result.reason === "already_undone" ? "Bereits rückgängig gemacht." : "Rückgängig machen fehlgeschlagen.");
-      }
-      setPendingIds((prev) => {
-        const next = new Set(prev);
-        next.delete(id);
-        return next;
-      });
-    })();
-  }
-
+export function EventLog({
+  entries,
+  onUndo,
+  syncingId,
+}: {
+  entries: GameEventLogEntry[];
+  // No `closed` flag: a closed game simply passes no onUndo, and the button hides itself.
+  onUndo?: (id: string) => void;
+  // The one entry currently in flight to the server — its own record hasn't resolved yet, so an undo
+  // tapped now would have no real id to target. Hidden rather than merely disabled so it's clear the
+  // tap wouldn't do anything, not just that it's briefly busy.
+  syncingId?: string | null;
+}) {
   if (entries.length === 0) {
     return <p className="py-6 text-center text-sm text-muted-foreground">Noch keine Ereignisse erfasst.</p>;
   }
 
   return (
     <div className="flex flex-col gap-1">
-      {error && <p className="text-sm text-destructive">{error}</p>}
       {entries.map((entry) => (
         <div
           key={entry.id}
@@ -60,15 +51,10 @@ export function EventLog({ entries, closed }: { entries: GameEventLogEntry[]; cl
             </span>
             <span className="text-xs text-muted-foreground">{formatRelativeTime(entry.createdAt)}</span>
           </div>
+          {entry.pending && <Badge variant="secondary">Wird synchronisiert</Badge>}
           {entry.undone && <Badge variant="secondary">Rückgängig</Badge>}
-          {!entry.undone && !closed && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              disabled={pendingIds.has(entry.id)}
-              onClick={() => handleUndo(entry.id)}
-            >
+          {!entry.undone && onUndo && entry.id !== syncingId && (
+            <Button type="button" variant="ghost" size="sm" onClick={() => onUndo(entry.id)}>
               Rückgängig
             </Button>
           )}
