@@ -83,6 +83,10 @@ export async function recordEvent(gameParticipationId: string, event: StatEvent)
   if (!participation) return;
   if (participation.ownScore !== null && participation.opponentScore !== null) return;
 
+  const disciplineHidden = process.env.HIDE_DISCIPLINE_STATS === "true";
+  const isDisciplineEvent = isCardEvent(event) || event === "TWO_MIN_PENALTY";
+  if (disciplineHidden && isDisciplineEvent) return;
+
   let insertValues: Record<string, number | boolean>;
   let updateSet: Record<string, unknown>;
 

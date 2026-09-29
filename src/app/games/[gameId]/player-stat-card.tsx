@@ -62,12 +62,14 @@ export function PlayerStatCard({
   type,
   counts,
   closed,
+  showDiscipline,
 }: {
   gameParticipationId: string;
   name: string;
   type: "FIELD" | "KEEPER";
   counts: Counts;
   closed: boolean;
+  showDiscipline: boolean;
 }) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -134,27 +136,29 @@ export function PlayerStatCard({
         </>
       )}
 
-      <div className="grid grid-cols-3 gap-2">
-        <button type="button" disabled={disabled} onClick={() => handleEvent("TWO_MIN_PENALTY")} className={buttonClass}>
-          2-Min ({counts.twoMinPenalties})
-        </button>
-        <button
-          type="button"
-          disabled={disabled || counts.yellowCard}
-          onClick={() => handleEvent("YELLOW_CARD")}
-          className={buttonClass}
-        >
-          Gelb{counts.yellowCard ? " ✓" : ""}
-        </button>
-        <button
-          type="button"
-          disabled={disabled || counts.redCard}
-          onClick={() => handleEvent("RED_CARD")}
-          className={buttonClass}
-        >
-          Rot{counts.redCard ? " ✓" : ""}
-        </button>
-      </div>
+      {showDiscipline && (
+        <div className="grid grid-cols-3 gap-2">
+          <button type="button" disabled={disabled} onClick={() => handleEvent("TWO_MIN_PENALTY")} className={buttonClass}>
+            2-Min ({counts.twoMinPenalties})
+          </button>
+          <button
+            type="button"
+            disabled={disabled || counts.yellowCard}
+            onClick={() => handleEvent("YELLOW_CARD")}
+            className={buttonClass}
+          >
+            Gelb{counts.yellowCard ? " ✓" : ""}
+          </button>
+          <button
+            type="button"
+            disabled={disabled || counts.redCard}
+            onClick={() => handleEvent("RED_CARD")}
+            className={buttonClass}
+          >
+            Rot{counts.redCard ? " ✓" : ""}
+          </button>
+        </div>
+      )}
 
       {error && <p className="text-sm text-red-600">{error}</p>}
     </div>

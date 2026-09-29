@@ -73,6 +73,7 @@ export default async function GameDetailPage({ params }: { params: Promise<{ gam
 
   const fieldPlayers = participants.filter((p) => p.type === "FIELD");
   const keepers = participants.filter((p) => p.type === "KEEPER");
+  const showDiscipline = process.env.HIDE_DISCIPLINE_STATS !== "true";
 
   return (
     <main className="flex min-h-screen flex-col items-center gap-8 px-4 py-8">
@@ -88,13 +89,23 @@ export default async function GameDetailPage({ params }: { params: Promise<{ gam
         <div className="flex flex-col gap-4">
           <h2 className="font-medium">Feldspieler</h2>
           {fieldPlayers.map((player) => (
-            <PlayerStatCard key={player.gameParticipationId} {...player} closed={isClosed} />
+            <PlayerStatCard
+              key={player.gameParticipationId}
+              {...player}
+              closed={isClosed}
+              showDiscipline={showDiscipline}
+            />
           ))}
         </div>
         <div className="flex flex-col gap-4">
           <h2 className="font-medium">Torhüter</h2>
           {keepers.map((player) => (
-            <PlayerStatCard key={player.gameParticipationId} {...player} closed={isClosed} />
+            <PlayerStatCard
+              key={player.gameParticipationId}
+              {...player}
+              closed={isClosed}
+              showDiscipline={showDiscipline}
+            />
           ))}
         </div>
       </div>
