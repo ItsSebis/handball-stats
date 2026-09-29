@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { recordEvent, type StatEvent } from "./actions";
+import { recordEvent, undoEvent, type StatEvent } from "./actions";
 
 type Counts = {
   shotsRegular: number;
@@ -18,6 +18,20 @@ type Counts = {
 };
 
 const buttonClass = "rounded border px-3 py-3 text-sm disabled:opacity-50";
+
+const EVENT_LABELS: Record<StatEvent, string> = {
+  SHOT_REGULAR_GOAL: "Tor (Regulär)",
+  SHOT_REGULAR_MISS: "Kein Tor (Regulär)",
+  SHOT_7M_GOAL: "Tor (7m)",
+  SHOT_7M_MISS: "Kein Tor (7m)",
+  SAVE_REGULAR: "Parade (Regulär)",
+  GOAL_CONCEDED_REGULAR: "Gegentor (Regulär)",
+  SAVE_7M: "Parade (7m)",
+  GOAL_CONCEDED_7M: "Gegentor (7m)",
+  TWO_MIN_PENALTY: "2-Min",
+  YELLOW_CARD: "Gelbe Karte",
+  RED_CARD: "Rote Karte",
+};
 
 function ShotSection({
   label,
@@ -73,15 +87,31 @@ export function PlayerStatCard({
 }) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [lastEvent, setLastEvent] = useState<StatEvent | null>(null);
 
   function handleEvent(event: StatEvent) {
     setError(null);
     startTransition(async () => {
       try {
         await recordEvent(gameParticipationId, event);
+        setLastEvent(event);
       } catch (err) {
         console.error("recordEvent failed", err);
         setError("Ereignis konnte nicht gespeichert werden.");
+      }
+    });
+  }
+
+  function handleUndo() {
+    if (!lastEvent) return;
+    setError(null);
+    startTransition(async () => {
+      try {
+        await undoEvent(gameParticipationId, lastEvent);
+        setLastEvent(null);
+      } catch (err) {
+        console.error("undoEvent failed", err);
+        setError("Rückgängig machen fehlgeschlagen.");
       }
     });
   }
@@ -158,6 +188,12 @@ export function PlayerStatCard({
             Rot{counts.redCard ? " ✓" : ""}
           </button>
         </div>
+      )}
+
+      {lastEvent && (
+        <button type="button" disabled={disabled} onClick={handleUndo} className="text-left text-sm underline disabled:opacity-50">
+          Rückgängig: {EVENT_LABELS[lastEvent]}
+        </button>
       )}
 
       {error && <p className="text-sm text-red-600">{error}</p>}

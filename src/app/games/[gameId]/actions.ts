@@ -57,10 +57,11 @@ function isCardEvent(event: StatEvent): event is CardEvent {
   return event === "YELLOW_CARD" || event === "RED_CARD";
 }
 
-export async function recordEvent(gameParticipationId: string, event: StatEvent) {
+// Re-derives team/type/closed state from the DB; never trusts the client. Null if not writable now.
+async function resolveWritableEvent(gameParticipationId: string, event: StatEvent) {
   const team = await getCurrentTeam();
-  if (!team) return;
-  if (!isUuid(gameParticipationId)) return;
+  if (!team) return null;
+  if (!isUuid(gameParticipationId)) return null;
 
   const [participation] = await db
     .select({
@@ -80,12 +81,24 @@ export async function recordEvent(gameParticipationId: string, event: StatEvent)
       ),
     );
 
-  if (!participation) return;
-  if (participation.ownScore !== null && participation.opponentScore !== null) return;
+  if (!participation) return null;
+  if (participation.ownScore !== null && participation.opponentScore !== null) return null;
 
   const disciplineHidden = process.env.HIDE_DISCIPLINE_STATS === "true";
-  const isDisciplineEvent = isCardEvent(event) || event === "TWO_MIN_PENALTY";
-  if (disciplineHidden && isDisciplineEvent) return;
+  if (disciplineHidden && (isCardEvent(event) || event === "TWO_MIN_PENALTY")) return null;
+
+  if (!isCardEvent(event)) {
+    const config = COUNTER_EVENTS[event];
+    if (!config) return null;
+    if (config.playerType && config.playerType !== participation.playerType) return null;
+  }
+
+  return { gameId: participation.gameId };
+}
+
+export async function recordEvent(gameParticipationId: string, event: StatEvent) {
+  const resolved = await resolveWritableEvent(gameParticipationId, event);
+  if (!resolved) return;
 
   let insertValues: Record<string, number | boolean>;
   let updateSet: Record<string, unknown>;
@@ -95,14 +108,9 @@ export async function recordEvent(gameParticipationId: string, event: StatEvent)
     insertValues = { [column]: true };
     updateSet = { [column]: true };
   } else {
-    const config = COUNTER_EVENTS[event];
-    if (!config) return;
-    if (config.playerType && config.playerType !== participation.playerType) return;
-
-    insertValues = Object.fromEntries(config.columns.map((column) => [column, 1]));
-    updateSet = Object.fromEntries(
-      config.columns.map((column) => [column, sql`${playerGameStats[column]} + 1`]),
-    );
+    const { columns } = COUNTER_EVENTS[event];
+    insertValues = Object.fromEntries(columns.map((column) => [column, 1]));
+    updateSet = Object.fromEntries(columns.map((column) => [column, sql`${playerGameStats[column]} + 1`]));
   }
 
   await db
@@ -110,7 +118,31 @@ export async function recordEvent(gameParticipationId: string, event: StatEvent)
     .values({ gameParticipationId, ...insertValues })
     .onConflictDoUpdate({ target: playerGameStats.gameParticipationId, set: updateSet });
 
-  revalidatePath(`/games/${participation.gameId}`);
+  revalidatePath(`/games/${resolved.gameId}`);
+}
+
+export async function undoEvent(gameParticipationId: string, event: StatEvent) {
+  const resolved = await resolveWritableEvent(gameParticipationId, event);
+  if (!resolved) return;
+
+  let updateSet: Record<string, unknown>;
+
+  if (isCardEvent(event)) {
+    const column = CARD_EVENTS[event];
+    updateSet = { [column]: false };
+  } else {
+    const { columns } = COUNTER_EVENTS[event];
+    updateSet = Object.fromEntries(
+      columns.map((column) => [column, sql`greatest(${playerGameStats[column]} - 1, 0)`]),
+    );
+  }
+
+  await db
+    .update(playerGameStats)
+    .set(updateSet)
+    .where(eq(playerGameStats.gameParticipationId, gameParticipationId));
+
+  revalidatePath(`/games/${resolved.gameId}`);
 }
 
 export async function closeGame(_prevState: string | undefined, formData: FormData) {
