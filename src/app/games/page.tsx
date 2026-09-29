@@ -70,9 +70,7 @@ export default async function GamesPage() {
           <li key={game.id}>
             <Link href={`/games/${game.id}`} className="underline">
               {game.date} – {game.opponentName} ({game.seasonLabel})
-              {game.ownScore !== null && game.opponentScore !== null
-                ? ` — ${game.ownScore}:${game.opponentScore}`
-                : ""}
+              {game.ownScore !== null && game.opponentScore !== null && ` – ${game.ownScore}:${game.opponentScore}`}
             </Link>
           </li>
         ))}

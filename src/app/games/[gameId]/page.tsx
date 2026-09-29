@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { db } from "@/db";
 import { gameParticipations, games, playerGameStats, players, seasons } from "@/db/schema";
 import { getCurrentTeam } from "@/lib/team";
+import { isUuid } from "@/lib/uuid";
 import { CloseGameForm } from "./close-game-form";
 import { PlayerStatCard } from "./player-stat-card";
 
@@ -11,6 +12,7 @@ export default async function GameDetailPage({ params }: { params: Promise<{ gam
   if (!team) redirect("/login");
 
   const { gameId } = await params;
+  if (!isUuid(gameId)) notFound();
 
   const [game] = await db
     .select({
@@ -86,27 +88,13 @@ export default async function GameDetailPage({ params }: { params: Promise<{ gam
         <div className="flex flex-col gap-4">
           <h2 className="font-medium">Feldspieler</h2>
           {fieldPlayers.map((player) => (
-            <PlayerStatCard
-              key={player.gameParticipationId}
-              gameParticipationId={player.gameParticipationId}
-              name={player.name}
-              type={player.type}
-              counts={player.counts}
-              closed={isClosed}
-            />
+            <PlayerStatCard key={player.gameParticipationId} {...player} closed={isClosed} />
           ))}
         </div>
         <div className="flex flex-col gap-4">
           <h2 className="font-medium">Torhüter</h2>
           {keepers.map((player) => (
-            <PlayerStatCard
-              key={player.gameParticipationId}
-              gameParticipationId={player.gameParticipationId}
-              name={player.name}
-              type={player.type}
-              counts={player.counts}
-              closed={isClosed}
-            />
+            <PlayerStatCard key={player.gameParticipationId} {...player} closed={isClosed} />
           ))}
         </div>
       </div>

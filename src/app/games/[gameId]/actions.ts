@@ -1,10 +1,11 @@
 "use server";
 
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db";
 import { gameParticipations, games, playerGameStats, players } from "@/db/schema";
 import { getCurrentTeam } from "@/lib/team";
+import { isUuid } from "@/lib/uuid";
 
 type CounterEvent =
   | "SHOT_REGULAR_GOAL"
@@ -59,6 +60,7 @@ function isCardEvent(event: StatEvent): event is CardEvent {
 export async function recordEvent(gameParticipationId: string, event: StatEvent) {
   const team = await getCurrentTeam();
   if (!team) return;
+  if (!isUuid(gameParticipationId)) return;
 
   const [participation] = await db
     .select({
@@ -70,33 +72,39 @@ export async function recordEvent(gameParticipationId: string, event: StatEvent)
     .from(gameParticipations)
     .innerJoin(games, eq(gameParticipations.gameId, games.id))
     .innerJoin(players, eq(gameParticipations.playerId, players.id))
-    .where(and(eq(gameParticipations.id, gameParticipationId), eq(games.teamId, team.id)));
+    .where(
+      and(
+        eq(gameParticipations.id, gameParticipationId),
+        eq(gameParticipations.present, true),
+        eq(games.teamId, team.id),
+      ),
+    );
 
   if (!participation) return;
   if (participation.ownScore !== null && participation.opponentScore !== null) return;
 
+  let insertValues: Record<string, number | boolean>;
+  let updateSet: Record<string, unknown>;
+
   if (isCardEvent(event)) {
     const column = CARD_EVENTS[event];
-    await db
-      .insert(playerGameStats)
-      .values({ gameParticipationId, [column]: true })
-      .onConflictDoUpdate({
-        target: playerGameStats.gameParticipationId,
-        set: { [column]: true },
-      });
+    insertValues = { [column]: true };
+    updateSet = { [column]: true };
   } else {
-    const { playerType, columns } = COUNTER_EVENTS[event];
-    if (playerType && playerType !== participation.playerType) return;
+    const config = COUNTER_EVENTS[event];
+    if (!config) return;
+    if (config.playerType && config.playerType !== participation.playerType) return;
 
-    const insertValues = Object.fromEntries(columns.map((column) => [column, 1]));
-    const updateSet = Object.fromEntries(
-      columns.map((column) => [column, sql`${playerGameStats[column]} + 1`]),
+    insertValues = Object.fromEntries(config.columns.map((column) => [column, 1]));
+    updateSet = Object.fromEntries(
+      config.columns.map((column) => [column, sql`${playerGameStats[column]} + 1`]),
     );
-    await db
-      .insert(playerGameStats)
-      .values({ gameParticipationId, ...insertValues })
-      .onConflictDoUpdate({ target: playerGameStats.gameParticipationId, set: updateSet });
   }
+
+  await db
+    .insert(playerGameStats)
+    .values({ gameParticipationId, ...insertValues })
+    .onConflictDoUpdate({ target: playerGameStats.gameParticipationId, set: updateSet });
 
   revalidatePath(`/games/${participation.gameId}`);
 }
@@ -106,13 +114,13 @@ export async function closeGame(_prevState: string | undefined, formData: FormDa
   if (!team) return "Nicht angemeldet.";
 
   const gameId = String(formData.get("gameId") ?? "");
-  const ownScoreRaw = String(formData.get("ownScore") ?? "");
-  const opponentScoreRaw = String(formData.get("opponentScore") ?? "");
+  const ownScoreRaw = String(formData.get("ownScore") ?? "").trim();
+  const opponentScoreRaw = String(formData.get("opponentScore") ?? "").trim();
   const ownScore = Number(ownScoreRaw);
   const opponentScore = Number(opponentScoreRaw);
 
   if (
-    !gameId ||
+    !isUuid(gameId) ||
     !ownScoreRaw ||
     !opponentScoreRaw ||
     !Number.isInteger(ownScore) ||
@@ -123,17 +131,20 @@ export async function closeGame(_prevState: string | undefined, formData: FormDa
     return "Bitte gültige Endstände angeben.";
   }
 
-  const [game] = await db
-    .select({ id: games.id })
-    .from(games)
-    .where(and(eq(games.id, gameId), eq(games.teamId, team.id)));
-  if (!game) return "Ungültiges Spiel.";
-
+  let updated;
   try {
-    await db.update(games).set({ ownScore, opponentScore }).where(eq(games.id, gameId));
+    updated = await db
+      .update(games)
+      .set({ ownScore, opponentScore })
+      .where(and(eq(games.id, gameId), eq(games.teamId, team.id), isNull(games.ownScore)))
+      .returning({ id: games.id });
   } catch (error) {
     console.error("closeGame: failed to update game", error);
     return "Spiel konnte nicht beendet werden. Bitte erneut versuchen.";
+  }
+
+  if (updated.length === 0) {
+    return "Ungültiges Spiel oder bereits beendet.";
   }
 
   revalidatePath(`/games/${gameId}`);
