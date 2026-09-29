@@ -17,6 +17,9 @@ export default async function DashboardPage() {
         <Link href="/seasons" className="underline">
           Saisons
         </Link>
+        <Link href="/games" className="underline">
+          Spiele
+        </Link>
       </nav>
       <form
         action={async () => {
