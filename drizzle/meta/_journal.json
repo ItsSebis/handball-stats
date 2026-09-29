@@ -15,6 +15,13 @@
       "when": 1789933056355,
       "tag": "0001_daily_yellow_claw",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790691398316,
+      "tag": "0002_military_meggan",
+      "breakpoints": true
     }
   ]
 }
