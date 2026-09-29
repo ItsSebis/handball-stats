@@ -1,6 +1,6 @@
 "use server";
 
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { games, gameParticipations, players, seasons } from "@/db/schema";
@@ -18,19 +18,18 @@ export async function createGame(_prevState: string | undefined, formData: FormD
     return "Bitte Saison, Gegner und Datum angeben.";
   }
 
-  const teamSeasons = await db
+  const [season] = await db
     .select({ id: seasons.id })
     .from(seasons)
-    .where(eq(seasons.teamId, team.id));
-  if (!teamSeasons.some((season) => season.id === seasonId)) {
+    .where(and(eq(seasons.id, seasonId), eq(seasons.teamId, team.id)));
+  if (!season) {
     return "Ungültige Saison.";
   }
 
-  const roster = await db
-    .select({ id: players.id, active: players.active })
+  const activeRoster = await db
+    .select({ id: players.id })
     .from(players)
-    .where(eq(players.teamId, team.id));
-  const activeRoster = roster.filter((player) => player.active);
+    .where(and(eq(players.teamId, team.id), eq(players.active, true)));
   if (activeRoster.length === 0) {
     return "Kein aktiver Kader vorhanden.";
   }

@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
@@ -15,26 +15,49 @@ export default async function GamesPage() {
     .from(seasons)
     .where(eq(seasons.teamId, team.id));
 
-  const roster = await db
-    .select({ id: players.id, name: players.name, type: players.type, active: players.active })
+  const activeRoster = await db
+    .select({ id: players.id, name: players.name, type: players.type })
     .from(players)
-    .where(eq(players.teamId, team.id));
-  const activeRoster = roster.filter((player) => player.active);
+    .where(and(eq(players.teamId, team.id), eq(players.active, true)));
   const fieldPlayers = activeRoster.filter((player) => player.type === "FIELD");
   const keepers = activeRoster.filter((player) => player.type === "KEEPER");
 
   const teamGames = await db
     .select({
       id: games.id,
-      seasonId: games.seasonId,
       opponentName: games.opponentName,
       date: games.date,
+      seasonLabel: seasons.label,
     })
     .from(games)
+    .innerJoin(seasons, eq(games.seasonId, seasons.id))
     .where(eq(games.teamId, team.id))
     .orderBy(desc(games.date));
 
-  const seasonLabelById = new Map(teamSeasons.map((season) => [season.id, season.label]));
+  let content;
+  if (teamSeasons.length === 0) {
+    content = (
+      <p className="text-sm">
+        Bitte zuerst eine{" "}
+        <Link href="/seasons" className="underline">
+          Saison anlegen
+        </Link>
+        .
+      </p>
+    );
+  } else if (activeRoster.length === 0) {
+    content = (
+      <p className="text-sm">
+        Bitte zuerst den{" "}
+        <Link href="/roster" className="underline">
+          Kader importieren
+        </Link>
+        .
+      </p>
+    );
+  } else {
+    content = <CreateGameForm seasons={teamSeasons} fieldPlayers={fieldPlayers} keepers={keepers} />;
+  }
 
   return (
     <main className="flex min-h-screen flex-col items-center gap-8 px-4 py-8">
@@ -43,30 +66,12 @@ export default async function GamesPage() {
       <ul className="flex w-full max-w-sm flex-col gap-1 text-sm">
         {teamGames.map((game) => (
           <li key={game.id}>
-            {game.date} – {game.opponentName} ({seasonLabelById.get(game.seasonId) ?? "?"})
+            {game.date} – {game.opponentName} ({game.seasonLabel})
           </li>
         ))}
       </ul>
 
-      {teamSeasons.length === 0 ? (
-        <p className="text-sm">
-          Bitte zuerst eine{" "}
-          <Link href="/seasons" className="underline">
-            Saison anlegen
-          </Link>
-          .
-        </p>
-      ) : fieldPlayers.length === 0 && keepers.length === 0 ? (
-        <p className="text-sm">
-          Bitte zuerst den{" "}
-          <Link href="/roster" className="underline">
-            Kader importieren
-          </Link>
-          .
-        </p>
-      ) : (
-        <CreateGameForm seasons={teamSeasons} fieldPlayers={fieldPlayers} keepers={keepers} />
-      )}
+      {content}
     </main>
   );
 }
