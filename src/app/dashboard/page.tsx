@@ -37,6 +37,9 @@ export default async function DashboardPage() {
         <Link href="/games" className="underline">
           Spiele
         </Link>
+        <Link href="/stats" className="underline">
+          Statistiken
+        </Link>
       </nav>
     </main>
   );

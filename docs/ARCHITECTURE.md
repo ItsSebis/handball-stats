@@ -10,6 +10,7 @@
 - **Hosting**: Vercel. Deploy via the connected Vercel project.
 - **Transactional email**: Resend (`resend` npm package), for signup confirmation and self-service password-reset emails (Phase 9). Domain already verified in Resend by the account owner.
 - **Testing**: Vitest, for server-action logic whose correctness is hard to eyeball (the persisted stat-event log's transactional record/undo behavior, Phase 4). Tests run against a local/scratch Postgres (`pg` + `drizzle-orm/node-postgres` as dev-only test wiring — the app's real `neon-http` driver speaks Neon's HTTP proxy protocol and cannot connect to a plain local Postgres), with `@/db` and `next/cache`'s `revalidatePath` mocked out per test file. No browser/UI test runner — manual browser verification per `WORKFLOW.md` covers that.
+- **Charting**: shadcn/ui's chart component (`npx shadcn add chart`, wraps `recharts`), used for the Phase 5 team-overview trend graphs. One chart type (line) for now — exact chart-type refinement stays open per `OPEN_QUESTIONS.md`/Phase 7.
 
 ## Environment / setup needs
 
