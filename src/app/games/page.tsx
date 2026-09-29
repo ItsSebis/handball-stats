@@ -28,6 +28,8 @@ export default async function GamesPage() {
       opponentName: games.opponentName,
       date: games.date,
       seasonLabel: seasons.label,
+      ownScore: games.ownScore,
+      opponentScore: games.opponentScore,
     })
     .from(games)
     .innerJoin(seasons, eq(games.seasonId, seasons.id))
@@ -66,7 +68,10 @@ export default async function GamesPage() {
       <ul className="flex w-full max-w-sm flex-col gap-1 text-sm">
         {teamGames.map((game) => (
           <li key={game.id}>
-            {game.date} – {game.opponentName} ({game.seasonLabel})
+            <Link href={`/games/${game.id}`} className="underline">
+              {game.date} – {game.opponentName} ({game.seasonLabel})
+              {game.ownScore !== null && game.opponentScore !== null && ` – ${game.ownScore}:${game.opponentScore}`}
+            </Link>
           </li>
         ))}
       </ul>
