@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,7 +14,6 @@ import { getInitials } from "@/lib/player-initials";
 export type PickerEligiblePlayer = {
   gameParticipationId: string;
   name: string;
-  disabled?: boolean;
   disabledReason?: string;
 };
 
@@ -24,27 +23,25 @@ export function PlayerPickerOverlay({
   title,
   eligiblePlayers,
   onSelect,
-  emptyMessage = "Keine Spieler verfügbar.",
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
   eligiblePlayers: PickerEligiblePlayer[];
   onSelect: (player: PickerEligiblePlayer) => void;
-  emptyMessage?: string;
 }) {
   // Synchronous guard (not state) so a fast double-tap on the same player can't fire onSelect twice
-  // before React schedules a re-render — set on the very first tap, reset only when the drawer reopens.
+  // before React schedules a re-render. Reset on every open (not in onOpenChange): Base UI only calls
+  // onOpenChange for a user-driven close (backdrop tap, swipe, Escape) — not when this component's
+  // *controlled* `open` prop flips from false to true from the parent — so resetting there would leave
+  // the guard permanently tripped after the very first pick across this component's whole lifetime.
   const submittedRef = useRef(false);
+  useEffect(() => {
+    if (open) submittedRef.current = false;
+  }, [open]);
 
   return (
-    <Drawer
-      open={open}
-      onOpenChange={(next) => {
-        if (next) submittedRef.current = false;
-        onOpenChange(next);
-      }}
-    >
+    <Drawer open={open} onOpenChange={onOpenChange}>
       <DrawerContent>
         <DrawerHeader className="flex-row items-center justify-between">
           <DrawerTitle>{title}</DrawerTitle>
@@ -54,13 +51,13 @@ export function PlayerPickerOverlay({
         </DrawerHeader>
         <div className="flex flex-col gap-1 overflow-y-auto p-4 pt-2">
           {eligiblePlayers.length === 0 && (
-            <p className="py-6 text-center text-sm text-muted-foreground">{emptyMessage}</p>
+            <p className="py-6 text-center text-sm text-muted-foreground">Keine Spieler verfügbar.</p>
           )}
           {eligiblePlayers.map((player) => (
             <button
               key={player.gameParticipationId}
               type="button"
-              disabled={player.disabled}
+              disabled={!!player.disabledReason}
               onClick={() => {
                 if (submittedRef.current) return;
                 submittedRef.current = true;

@@ -1,54 +1,90 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { recordEvent, type StatEvent } from "./actions";
 import type { Participant } from "./participant";
 import { PlayerPickerOverlay, type PickerEligiblePlayer } from "./player-picker-overlay";
-import { Button } from "@/components/ui/button";
 
-const FIELD_ACTIONS: { label: string; event: StatEvent }[] = [
+type Action = { label: string; event: StatEvent };
+
+const FIELD_ACTIONS: Action[] = [
   { label: "Tor", event: "SHOT_REGULAR_GOAL" },
   { label: "Kein Tor", event: "SHOT_REGULAR_MISS" },
   { label: "7m Tor", event: "SHOT_7M_GOAL" },
   { label: "7m Kein Tor", event: "SHOT_7M_MISS" },
 ];
 
-const KEEPER_ACTIONS: { label: string; event: StatEvent }[] = [
+const KEEPER_ACTIONS: Action[] = [
   { label: "Parade", event: "SAVE_REGULAR" },
   { label: "Gegentor", event: "GOAL_CONCEDED_REGULAR" },
   { label: "7m Parade", event: "SAVE_7M" },
   { label: "7m Gegentor", event: "GOAL_CONCEDED_7M" },
 ];
 
-const DISCIPLINE_ACTIONS: { label: string; event: StatEvent }[] = [
+const DISCIPLINE_ACTIONS: Action[] = [
   { label: "2-Min", event: "TWO_MIN_PENALTY" },
   { label: "Gelb", event: "YELLOW_CARD" },
   { label: "Rot", event: "RED_CARD" },
 ];
 
+// Only YELLOW_CARD/RED_CARD exclude a player who already has that card; every other event has no
+// exclusion rule, hence the lookup rather than a branch per event.
+const CARD_ALREADY_SET: Partial<Record<StatEvent, { has: (p: Participant) => boolean; reason: string }>> = {
+  YELLOW_CARD: { has: (p) => p.yellowCard, reason: "bereits verwarnt" },
+  RED_CARD: { has: (p) => p.redCard, reason: "bereits vom Feld gestellt" },
+};
+
 type ActivePicker = { title: string; eventType: StatEvent; players: PickerEligiblePlayer[] };
 
 function toEligible(participants: Participant[], event: StatEvent): PickerEligiblePlayer[] {
-  return participants.map((p) => {
-    if (event === "YELLOW_CARD") {
-      return {
-        gameParticipationId: p.gameParticipationId,
-        name: p.name,
-        disabled: p.yellowCard,
-        disabledReason: p.yellowCard ? "bereits verwarnt" : undefined,
-      };
-    }
-    if (event === "RED_CARD") {
-      return {
-        gameParticipationId: p.gameParticipationId,
-        name: p.name,
-        disabled: p.redCard,
-        disabledReason: p.redCard ? "bereits vom Feld gestellt" : undefined,
-      };
-    }
-    return { gameParticipationId: p.gameParticipationId, name: p.name };
-  });
+  const cardRule = CARD_ALREADY_SET[event];
+  return participants.map((p) => ({
+    gameParticipationId: p.gameParticipationId,
+    name: p.name,
+    disabledReason: cardRule?.has(p) ? cardRule.reason : undefined,
+  }));
+}
+
+function ActionGroup({
+  title,
+  actions,
+  participants,
+  columns,
+  disabled,
+  onPick,
+}: {
+  title: string;
+  actions: Action[];
+  participants: Participant[];
+  columns: 2 | 3;
+  disabled: boolean;
+  onPick: (label: string, event: StatEvent, participants: Participant[]) => void;
+}) {
+  if (participants.length === 0) return null;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+      </CardHeader>
+      <CardContent className={columns === 2 ? "grid grid-cols-2 gap-2" : "grid grid-cols-3 gap-2"}>
+        {actions.map((action) => (
+          <Button
+            key={action.event}
+            type="button"
+            variant="outline"
+            disabled={disabled}
+            className="h-auto py-3"
+            onClick={() => onPick(action.label, action.event, participants)}
+          >
+            {action.label}
+          </Button>
+        ))}
+      </CardContent>
+    </Card>
+  );
 }
 
 export function ActionButtons({
@@ -85,70 +121,31 @@ export function ActionButtons({
 
   return (
     <div className="flex flex-col gap-3">
-      {fieldPlayers.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Feldspieler</CardTitle>
-          </CardHeader>
-          <CardContent className="grid grid-cols-2 gap-2">
-            {FIELD_ACTIONS.map((action) => (
-              <Button
-                key={action.event}
-                type="button"
-                variant="outline"
-                disabled={isPending}
-                className="h-auto py-3"
-                onClick={() => openPicker(action.label, action.event, fieldPlayers)}
-              >
-                {action.label}
-              </Button>
-            ))}
-          </CardContent>
-        </Card>
-      )}
-
-      {keepers.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Torhüter</CardTitle>
-          </CardHeader>
-          <CardContent className="grid grid-cols-2 gap-2">
-            {KEEPER_ACTIONS.map((action) => (
-              <Button
-                key={action.event}
-                type="button"
-                variant="outline"
-                disabled={isPending}
-                className="h-auto py-3"
-                onClick={() => openPicker(action.label, action.event, keepers)}
-              >
-                {action.label}
-              </Button>
-            ))}
-          </CardContent>
-        </Card>
-      )}
-
+      <ActionGroup
+        title="Feldspieler"
+        actions={FIELD_ACTIONS}
+        participants={fieldPlayers}
+        columns={2}
+        disabled={isPending}
+        onPick={openPicker}
+      />
+      <ActionGroup
+        title="Torhüter"
+        actions={KEEPER_ACTIONS}
+        participants={keepers}
+        columns={2}
+        disabled={isPending}
+        onPick={openPicker}
+      />
       {showDiscipline && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Disziplin</CardTitle>
-          </CardHeader>
-          <CardContent className="grid grid-cols-3 gap-2">
-            {DISCIPLINE_ACTIONS.map((action) => (
-              <Button
-                key={action.event}
-                type="button"
-                variant="outline"
-                disabled={isPending}
-                className="h-auto py-3"
-                onClick={() => openPicker(action.label, action.event, [...fieldPlayers, ...keepers])}
-              >
-                {action.label}
-              </Button>
-            ))}
-          </CardContent>
-        </Card>
+        <ActionGroup
+          title="Disziplin"
+          actions={DISCIPLINE_ACTIONS}
+          participants={[...fieldPlayers, ...keepers]}
+          columns={3}
+          disabled={isPending}
+          onPick={openPicker}
+        />
       )}
 
       {error && <p className="text-sm text-destructive">{error}</p>}

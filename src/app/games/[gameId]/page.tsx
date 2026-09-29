@@ -1,7 +1,7 @@
 import { and, desc, eq } from "drizzle-orm";
 import { notFound, redirect } from "next/navigation";
-import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/page-header";
+import { Badge } from "@/components/ui/badge";
 import { db } from "@/db";
 import { gameParticipations, games, playerGameStatEvents, playerGameStats, players, seasons } from "@/db/schema";
 import { getCurrentTeam } from "@/lib/team";
@@ -78,7 +78,7 @@ export default async function GameDetailPage({ params }: { params: Promise<{ gam
   const keepers = participants.filter((p) => p.type === "KEEPER");
   const showDiscipline = process.env.HIDE_DISCIPLINE_STATS !== "true";
 
-  const eventLogRows = await db
+  const eventLog: GameEventLogEntry[] = await db
     .select({
       id: playerGameStatEvents.id,
       eventType: playerGameStatEvents.eventType,
@@ -91,14 +91,6 @@ export default async function GameDetailPage({ params }: { params: Promise<{ gam
     .innerJoin(players, eq(gameParticipations.playerId, players.id))
     .where(eq(gameParticipations.gameId, game.id))
     .orderBy(desc(playerGameStatEvents.createdAt));
-
-  const eventLog: GameEventLogEntry[] = eventLogRows.map((row) => ({
-    id: row.id,
-    eventType: row.eventType,
-    undone: row.undone,
-    createdAt: row.createdAt,
-    playerName: row.playerName,
-  }));
 
   return (
     <main className="flex min-h-screen flex-col items-center">

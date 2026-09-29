@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,20 +18,25 @@ export type GameEventLogEntry = {
 };
 
 export function EventLog({ entries, closed }: { entries: GameEventLogEntry[]; closed: boolean }) {
-  const [pendingId, setPendingId] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
+  // A Set, not a single id: undoing row A must not re-enable row B's button while B is still in
+  // flight (and vice versa) if the coach taps undo on two different rows in quick succession.
+  const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
 
   function handleUndo(id: string) {
     setError(null);
-    setPendingId(id);
-    startTransition(async () => {
+    setPendingIds((prev) => new Set(prev).add(id));
+    void (async () => {
       const result = await undoEventById(id);
       if (!result.ok) {
         setError(result.reason === "already_undone" ? "Bereits rückgängig gemacht." : "Rückgängig machen fehlgeschlagen.");
       }
-      setPendingId(null);
-    });
+      setPendingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    })();
   }
 
   if (entries.length === 0) {
@@ -55,20 +60,17 @@ export function EventLog({ entries, closed }: { entries: GameEventLogEntry[]; cl
             </span>
             <span className="text-xs text-muted-foreground">{formatRelativeTime(entry.createdAt)}</span>
           </div>
-          {entry.undone ? (
-            <Badge variant="secondary">Rückgängig</Badge>
-          ) : (
-            !closed && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                disabled={isPending && pendingId === entry.id}
-                onClick={() => handleUndo(entry.id)}
-              >
-                Rückgängig
-              </Button>
-            )
+          {entry.undone && <Badge variant="secondary">Rückgängig</Badge>}
+          {!entry.undone && !closed && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={pendingIds.has(entry.id)}
+              onClick={() => handleUndo(entry.id)}
+            >
+              Rückgängig
+            </Button>
           )}
         </div>
       ))}

@@ -7,13 +7,11 @@ export function PageHeader({
   title,
   description,
   backHref,
-  backLabel = "Zurück",
   actions,
 }: {
   title: string;
   description?: string;
   backHref?: string;
-  backLabel?: string;
   actions?: ReactNode;
 }) {
   return (
@@ -22,7 +20,8 @@ export function PageHeader({
         <Button
           variant="ghost"
           size="icon"
-          aria-label={backLabel}
+          aria-label="Zurück"
+          nativeButton={false}
           render={<Link href={backHref} />}
         >
           <ArrowLeft />

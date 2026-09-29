@@ -18,16 +18,12 @@ function DisciplineBadges({ twoMinPenalties, yellowCard, redCard }: Pick<Partici
 function ParticipantGroup({
   title,
   participants,
-  regularLabel,
-  sevenMeterLabel,
   regular,
   sevenMeter,
   showDiscipline,
 }: {
   title: string;
   participants: Participant[];
-  regularLabel: string;
-  sevenMeterLabel: string;
   regular: (p: Participant) => string;
   sevenMeter: (p: Participant) => string;
   showDiscipline: boolean;
@@ -41,8 +37,8 @@ function ParticipantGroup({
         <TableHeader>
           <TableRow>
             <TableHead className="sticky left-0 bg-background">Spieler</TableHead>
-            <TableHead>{regularLabel}</TableHead>
-            <TableHead>{sevenMeterLabel}</TableHead>
+            <TableHead>Regulär</TableHead>
+            <TableHead>7m</TableHead>
             {showDiscipline && <TableHead>Disziplin</TableHead>}
           </TableRow>
         </TableHeader>
@@ -54,11 +50,7 @@ function ParticipantGroup({
               <TableCell>{sevenMeter(p)}</TableCell>
               {showDiscipline && (
                 <TableCell>
-                  <DisciplineBadges
-                    twoMinPenalties={p.twoMinPenalties}
-                    yellowCard={p.yellowCard}
-                    redCard={p.redCard}
-                  />
+                  <DisciplineBadges {...p} />
                 </TableCell>
               )}
             </TableRow>
@@ -83,8 +75,6 @@ export function TallyTable({
       <ParticipantGroup
         title="Feldspieler"
         participants={fieldPlayers}
-        regularLabel="Regulär"
-        sevenMeterLabel="7m"
         regular={(p) => `${p.goalsRegular}/${p.shotsRegular}`}
         sevenMeter={(p) => `${p.goals7m}/${p.shots7m}`}
         showDiscipline={showDiscipline}
@@ -92,8 +82,6 @@ export function TallyTable({
       <ParticipantGroup
         title="Torhüter"
         participants={keepers}
-        regularLabel="Regulär"
-        sevenMeterLabel="7m"
         regular={(p) => `${p.savesRegular}/${p.shotsFacedRegular}`}
         sevenMeter={(p) => `${p.saves7m}/${p.shotsFaced7m}`}
         showDiscipline={showDiscipline}

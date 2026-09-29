@@ -56,6 +56,18 @@ function isCardEvent(event: StatEvent): event is CardEvent {
   return event === "YELLOW_CARD" || event === "RED_CARD";
 }
 
+// Shared by the record and undo paths so the two can't silently drift apart.
+function isGameOpenAndEventAllowed(
+  ownScore: number | null,
+  opponentScore: number | null,
+  event: StatEvent,
+): boolean {
+  if (ownScore !== null && opponentScore !== null) return false;
+  const disciplineHidden = process.env.HIDE_DISCIPLINE_STATS === "true";
+  if (disciplineHidden && (isCardEvent(event) || event === "TWO_MIN_PENALTY")) return false;
+  return true;
+}
+
 // The physical (snake_case) column name backing a playerGameStats field. Only ever called with
 // keys from the fixed COUNTER_EVENTS/CARD_EVENTS maps above, never from client input.
 function columnName(key: CounterColumn | CardColumn): string {
@@ -87,10 +99,7 @@ async function resolveWritableParticipation(gameParticipationId: string, event: 
     );
 
   if (!participation) return null;
-  if (participation.ownScore !== null && participation.opponentScore !== null) return null;
-
-  const disciplineHidden = process.env.HIDE_DISCIPLINE_STATS === "true";
-  if (disciplineHidden && (isCardEvent(event) || event === "TWO_MIN_PENALTY")) return null;
+  if (!isGameOpenAndEventAllowed(participation.ownScore, participation.opponentScore, event)) return null;
 
   if (!isCardEvent(event)) {
     // COUNTER_EVENTS is a total Record, so this only guards a bad event string from a raw client call.
@@ -102,32 +111,31 @@ async function resolveWritableParticipation(gameParticipationId: string, event: 
   return { gameId: participation.gameId };
 }
 
-export type RecordedEvent = {
-  id: string;
-  gameParticipationId: string;
-  eventType: StatEvent;
-  createdAt: Date;
-  playerName: string;
-};
-
-export type RecordEventResult =
-  | { ok: true; entry: RecordedEvent }
-  | { ok: false; reason: "not_writable" | "no_op" };
+export type RecordEventResult = { ok: true; id: string } | { ok: false; reason: "not_writable" | "no_op" };
 
 // Inserts one persisted log row and updates the aggregate `playerGameStats` counters/booleans in a
 // single statement (neon-http has no db.transaction() — see src/db/index.ts). The log insert reads
-// from the upsert CTE's own RETURNING output, so a card tap that's a no-op (already true) writes no
-// log row either: the two can never fall out of sync.
+// from the upsert CTE's own RETURNING output, so a card tap that's a no-op (already true), or a write
+// that lost the race against the game closing, writes no log row either: the two can never fall out
+// of sync.
 export async function recordEvent(gameParticipationId: string, event: StatEvent): Promise<RecordEventResult> {
   const participation = await resolveWritableParticipation(gameParticipationId, event);
   if (!participation) return { ok: false, reason: "not_writable" };
+
+  // Re-checked here, atomically with the write itself: resolveWritableParticipation's check above ran
+  // in a separate round trip, so a game could close in the gap between that check and this statement.
+  const gameOpen = sql`EXISTS (
+    SELECT 1 FROM game_participations gp
+    JOIN games g ON g.id = gp.game_id
+    WHERE gp.id = ${gameParticipationId} AND g.own_score IS NULL
+  )`;
 
   let upsertSql: SQL;
   if (isCardEvent(event)) {
     const col = columnName(CARD_EVENTS[event]);
     upsertSql = sql`
       INSERT INTO player_game_stats (game_participation_id, ${sql.raw(col)})
-      VALUES (${gameParticipationId}, true)
+      SELECT ${gameParticipationId}, true WHERE ${gameOpen}
       ON CONFLICT (game_participation_id) DO UPDATE SET ${sql.raw(col)} = true
       WHERE player_game_stats.${sql.raw(col)} = false
       RETURNING game_participation_id
@@ -151,45 +159,27 @@ export async function recordEvent(gameParticipationId: string, event: StatEvent)
     );
     upsertSql = sql`
       INSERT INTO player_game_stats (game_participation_id, ${insertCols})
-      VALUES (${gameParticipationId}, ${insertVals})
+      SELECT ${gameParticipationId}, ${insertVals} WHERE ${gameOpen}
       ON CONFLICT (game_participation_id) DO UPDATE SET ${updateSet}
       RETURNING game_participation_id
     `;
   }
 
-  const result = await db.execute<{
-    id: string;
-    created_at: Date;
-    game_participation_id: string;
-    event_type: StatEvent;
-    player_name: string;
-  }>(sql`
+  const result = await db.execute<{ id: string }>(sql`
     WITH upserted AS (${upsertSql}),
     log AS (
       INSERT INTO player_game_stat_events (game_participation_id, event_type)
       SELECT game_participation_id, ${event} FROM upserted
-      RETURNING id, created_at, game_participation_id, event_type
+      RETURNING id
     )
-    SELECT log.id, log.created_at, log.game_participation_id, log.event_type, players.name AS player_name
-    FROM log
-    JOIN game_participations gp ON gp.id = log.game_participation_id
-    JOIN players ON players.id = gp.player_id
+    SELECT id FROM log
   `);
 
   const row = result.rows[0];
   if (!row) return { ok: false, reason: "no_op" };
 
   revalidatePath(`/games/${participation.gameId}`);
-  return {
-    ok: true,
-    entry: {
-      id: row.id,
-      gameParticipationId: row.game_participation_id,
-      eventType: row.event_type,
-      createdAt: new Date(row.created_at),
-      playerName: row.player_name,
-    },
-  };
+  return { ok: true, id: row.id };
 }
 
 export type UndoEventResult =
@@ -220,10 +210,7 @@ export async function undoEventById(eventLogId: string): Promise<UndoEventResult
 
   // Not-found and not-yours are deliberately indistinguishable, matching resolveWritableParticipation.
   if (!row) return { ok: false, reason: "not_found" };
-  if (row.ownScore !== null && row.opponentScore !== null) return { ok: false, reason: "not_writable" };
-
-  const disciplineHidden = process.env.HIDE_DISCIPLINE_STATS === "true";
-  if (disciplineHidden && (isCardEvent(row.eventType) || row.eventType === "TWO_MIN_PENALTY")) {
+  if (!isGameOpenAndEventAllowed(row.ownScore, row.opponentScore, row.eventType)) {
     return { ok: false, reason: "not_writable" };
   }
   if (row.undone) return { ok: false, reason: "already_undone" };
@@ -239,6 +226,9 @@ export async function undoEventById(eventLogId: string): Promise<UndoEventResult
           WHERE e.game_participation_id = flipped.game_participation_id
             AND e.event_type = ${row.eventType}
             AND e.undone = false
+            -- Excluding the flipped row by id (rather than relying on undone = false alone) matters:
+            -- sibling data-modifying CTEs share one snapshot and don't see each other's writes, so this
+            -- would not see the flipped CTE's own undone = true write if it re-queried by state instead.
             AND e.id <> ${eventLogId}
         ) THEN false ELSE p.${sql.raw(col)} END
       FROM flipped
@@ -263,14 +253,18 @@ export async function undoEventById(eventLogId: string): Promise<UndoEventResult
     `;
   }
 
-  // Excluding the flipped row by id (rather than relying on `undone = false` alone) matters: sibling
-  // data-modifying CTEs share one snapshot and don't see each other's writes, so the NOT EXISTS check
-  // above would not see this UPDATE's own `undone = true` if it re-queried by state instead of by id.
   const result = await db.execute<{ game_participation_id: string }>(sql`
     WITH flipped AS (
-      UPDATE player_game_stat_events
+      UPDATE player_game_stat_events e
       SET undone = true, undone_at = now()
-      WHERE id = ${eventLogId} AND undone = false
+      WHERE e.id = ${eventLogId} AND e.undone = false
+        AND EXISTS (
+          -- Re-checked atomically with the write: the JS-level check above ran in a separate round
+          -- trip, so the game could have closed in the gap between that check and this statement.
+          SELECT 1 FROM game_participations gp
+          JOIN games g ON g.id = gp.game_id
+          WHERE gp.id = e.game_participation_id AND g.own_score IS NULL
+        )
       RETURNING game_participation_id
     )
     ${reverseSql}

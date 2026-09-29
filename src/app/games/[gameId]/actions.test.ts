@@ -52,15 +52,35 @@ describe("recordEvent / undoEventById", () => {
     const result = await recordEvent(fixture.fieldParticipationId, "SHOT_REGULAR_GOAL");
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error("unreachable");
-    expect(result.entry.eventType).toBe("SHOT_REGULAR_GOAL");
-    expect(result.entry.playerName).toBe("Field Player");
 
-    const undo = await undoEventById(result.entry.id);
+    const statsAfterRecord = await getStatsRow(fixture.fieldParticipationId);
+    expect(statsAfterRecord?.shotsRegular).toBe(1);
+    expect(statsAfterRecord?.goalsRegular).toBe(1);
+
+    const undo = await undoEventById(result.id);
     expect(undo).toEqual({ ok: true });
 
     const stats = await getStatsRow(fixture.fieldParticipationId);
     expect(stats?.shotsRegular).toBe(0);
     expect(stats?.goalsRegular).toBe(0);
+  });
+
+  it("records and undoes a keeper save", async () => {
+    const fixture = await createGameFixture();
+    vi.mocked(getCurrentTeam).mockResolvedValue(fixture.team);
+
+    const result = await recordEvent(fixture.keeperParticipationId, "SAVE_REGULAR");
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("unreachable");
+
+    const stats = await getStatsRow(fixture.keeperParticipationId);
+    expect(stats?.shotsFacedRegular).toBe(1);
+    expect(stats?.savesRegular).toBe(1);
+
+    expect(await undoEventById(result.id)).toEqual({ ok: true });
+    const statsAfterUndo = await getStatsRow(fixture.keeperParticipationId);
+    expect(statsAfterUndo?.shotsFacedRegular).toBe(0);
+    expect(statsAfterUndo?.savesRegular).toBe(0);
   });
 
   it("undoes a non-latest entry independently, leaving later entries' effects intact", async () => {
@@ -71,7 +91,7 @@ describe("recordEvent / undoEventById", () => {
     const second = await recordEvent(fixture.fieldParticipationId, "SHOT_REGULAR_MISS");
     if (!first.ok || !second.ok) throw new Error("unreachable");
 
-    const undoFirst = await undoEventById(first.entry.id);
+    const undoFirst = await undoEventById(first.id);
     expect(undoFirst).toEqual({ ok: true });
 
     const stats = await getStatsRow(fixture.fieldParticipationId);
@@ -87,8 +107,8 @@ describe("recordEvent / undoEventById", () => {
     const recorded = await recordEvent(fixture.fieldParticipationId, "SHOT_REGULAR_GOAL");
     if (!recorded.ok) throw new Error("unreachable");
 
-    const firstUndo = await undoEventById(recorded.entry.id);
-    const secondUndo = await undoEventById(recorded.entry.id);
+    const firstUndo = await undoEventById(recorded.id);
+    const secondUndo = await undoEventById(recorded.id);
     expect(firstUndo).toEqual({ ok: true });
     expect(secondUndo).toEqual({ ok: false, reason: "already_undone" });
   });
@@ -113,20 +133,20 @@ describe("recordEvent / undoEventById", () => {
 
     const first = await recordEvent(fixture.fieldParticipationId, "YELLOW_CARD");
     if (!first.ok) throw new Error("unreachable");
-    expect(await undoEventById(first.entry.id)).toEqual({ ok: true });
+    expect(await undoEventById(first.id)).toEqual({ ok: true });
 
     const second = await recordEvent(fixture.fieldParticipationId, "YELLOW_CARD");
     if (!second.ok) throw new Error("unreachable");
 
     // Undoing the OLD (already-undone) entry again must be a no-op, and must not clear the boolean
     // that the second, still-active entry is now responsible for.
-    expect(await undoEventById(first.entry.id)).toEqual({ ok: false, reason: "already_undone" });
+    expect(await undoEventById(first.id)).toEqual({ ok: false, reason: "already_undone" });
 
     const stats = await getStatsRow(fixture.fieldParticipationId);
     expect(stats?.yellowCard).toBe(true);
 
     // Undoing the currently-active entry does clear it.
-    expect(await undoEventById(second.entry.id)).toEqual({ ok: true });
+    expect(await undoEventById(second.id)).toEqual({ ok: true });
     const statsAfter = await getStatsRow(fixture.fieldParticipationId);
     expect(statsAfter?.yellowCard).toBe(false);
   });
@@ -144,7 +164,7 @@ describe("recordEvent / undoEventById", () => {
       ok: false,
       reason: "not_writable",
     });
-    expect(await undoEventById(recorded.entry.id)).toEqual({ ok: false, reason: "not_writable" });
+    expect(await undoEventById(recorded.id)).toEqual({ ok: false, reason: "not_writable" });
   });
 
   it("HIDE_DISCIPLINE_STATS blocks recording and undoing card/2-min events", async () => {
@@ -160,7 +180,7 @@ describe("recordEvent / undoEventById", () => {
       ok: false,
       reason: "not_writable",
     });
-    expect(await undoEventById(recorded.entry.id)).toEqual({ ok: false, reason: "not_writable" });
+    expect(await undoEventById(recorded.id)).toEqual({ ok: false, reason: "not_writable" });
   });
 
   it("rejects a counter event logged against the wrong player type", async () => {
