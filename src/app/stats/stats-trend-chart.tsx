@@ -1,8 +1,15 @@
 "use client";
 
-import { CartesianGrid, Line, LineChart, XAxis } from "recharts";
+import { CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
+import {
+  ChartContainer,
+  ChartLegend,
+  ChartLegendContent,
+  ChartTooltip,
+  ChartTooltipContent,
+  type ChartConfig,
+} from "@/components/ui/chart";
 import { computeQuote, QUOTES, toPercent, type QuoteKey } from "./format-quote";
 import type { GameTrendPoint } from "./queries";
 
@@ -43,7 +50,15 @@ function TrendChart({ title, config, data }: { title: string; config: ChartConfi
           <LineChart data={data} margin={{ left: 12, right: 12 }}>
             <CartesianGrid vertical={false} />
             <XAxis dataKey="date" tickLine={false} axisLine={false} tickMargin={8} />
+            <YAxis
+              domain={[0, 100]}
+              tickLine={false}
+              axisLine={false}
+              tickMargin={8}
+              tickFormatter={(value: number) => `${value}%`}
+            />
             <ChartTooltip content={<ChartTooltipContent />} />
+            <ChartLegend content={<ChartLegendContent />} />
             {Object.keys(config).map((key) => (
               <Line key={key} dataKey={key} type="monotone" stroke={`var(--color-${key})`} />
             ))}
