@@ -57,10 +57,11 @@ function isCardEvent(event: StatEvent): event is CardEvent {
   return event === "YELLOW_CARD" || event === "RED_CARD";
 }
 
-export async function recordEvent(gameParticipationId: string, event: StatEvent) {
+// Re-derives team/type/closed state from the DB; never trusts the client. Null if not writable now.
+async function resolveWritableParticipation(gameParticipationId: string, event: StatEvent) {
   const team = await getCurrentTeam();
-  if (!team) return;
-  if (!isUuid(gameParticipationId)) return;
+  if (!team) return null;
+  if (!isUuid(gameParticipationId)) return null;
 
   const [participation] = await db
     .select({
@@ -80,35 +81,78 @@ export async function recordEvent(gameParticipationId: string, event: StatEvent)
       ),
     );
 
-  if (!participation) return;
-  if (participation.ownScore !== null && participation.opponentScore !== null) return;
+  if (!participation) return null;
+  if (participation.ownScore !== null && participation.opponentScore !== null) return null;
 
   const disciplineHidden = process.env.HIDE_DISCIPLINE_STATS === "true";
-  const isDisciplineEvent = isCardEvent(event) || event === "TWO_MIN_PENALTY";
-  if (disciplineHidden && isDisciplineEvent) return;
+  if (disciplineHidden && (isCardEvent(event) || event === "TWO_MIN_PENALTY")) return null;
 
-  let insertValues: Record<string, number | boolean>;
+  if (!isCardEvent(event)) {
+    // COUNTER_EVENTS is a total Record, so this only guards a bad event string from a raw client call.
+    const config = COUNTER_EVENTS[event];
+    if (!config) return null;
+    if (config.playerType && config.playerType !== participation.playerType) return null;
+  }
+
+  return { gameId: participation.gameId };
+}
+
+// Returns whether the event actually changed anything, so the caller can decide it's now undoable.
+export async function recordEvent(gameParticipationId: string, event: StatEvent): Promise<boolean> {
+  const participation = await resolveWritableParticipation(gameParticipationId, event);
+  if (!participation) return false;
+
+  let applied: boolean;
+
+  if (isCardEvent(event)) {
+    const column = CARD_EVENTS[event];
+    const rows = await db
+      .insert(playerGameStats)
+      .values({ gameParticipationId, [column]: true })
+      .onConflictDoUpdate({
+        target: playerGameStats.gameParticipationId,
+        set: { [column]: true },
+        setWhere: eq(playerGameStats[column], false),
+      })
+      .returning({ id: playerGameStats.gameParticipationId });
+    applied = rows.length > 0;
+  } else {
+    const { columns } = COUNTER_EVENTS[event];
+    const insertValues = Object.fromEntries(columns.map((column) => [column, 1]));
+    const updateSet = Object.fromEntries(
+      columns.map((column) => [column, sql`${playerGameStats[column]} + 1`]),
+    );
+    await db
+      .insert(playerGameStats)
+      .values({ gameParticipationId, ...insertValues })
+      .onConflictDoUpdate({ target: playerGameStats.gameParticipationId, set: updateSet });
+    applied = true;
+  }
+
+  if (applied) revalidatePath(`/games/${participation.gameId}`);
+  return applied;
+}
+
+export async function undoEvent(gameParticipationId: string, event: StatEvent) {
+  const participation = await resolveWritableParticipation(gameParticipationId, event);
+  if (!participation) return;
+
   let updateSet: Record<string, unknown>;
 
   if (isCardEvent(event)) {
     const column = CARD_EVENTS[event];
-    insertValues = { [column]: true };
-    updateSet = { [column]: true };
+    updateSet = { [column]: false };
   } else {
-    const config = COUNTER_EVENTS[event];
-    if (!config) return;
-    if (config.playerType && config.playerType !== participation.playerType) return;
-
-    insertValues = Object.fromEntries(config.columns.map((column) => [column, 1]));
+    const { columns } = COUNTER_EVENTS[event];
     updateSet = Object.fromEntries(
-      config.columns.map((column) => [column, sql`${playerGameStats[column]} + 1`]),
+      columns.map((column) => [column, sql`greatest(${playerGameStats[column]} - 1, 0)`]),
     );
   }
 
   await db
-    .insert(playerGameStats)
-    .values({ gameParticipationId, ...insertValues })
-    .onConflictDoUpdate({ target: playerGameStats.gameParticipationId, set: updateSet });
+    .update(playerGameStats)
+    .set(updateSet)
+    .where(eq(playerGameStats.gameParticipationId, gameParticipationId));
 
   revalidatePath(`/games/${participation.gameId}`);
 }
