@@ -162,9 +162,9 @@ describe("recordEvent / undoEventById", () => {
 
     expect(await recordEvent(fixture.fieldParticipationId, "SHOT_REGULAR_GOAL")).toEqual({
       ok: false,
-      reason: "not_writable",
+      reason: "closed",
     });
-    expect(await undoEventById(recorded.id)).toEqual({ ok: false, reason: "not_writable" });
+    expect(await undoEventById(recorded.id)).toEqual({ ok: false, reason: "closed" });
   });
 
   it("HIDE_DISCIPLINE_STATS blocks recording and undoing card/2-min events", async () => {

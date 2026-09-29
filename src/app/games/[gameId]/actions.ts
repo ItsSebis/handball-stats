@@ -3,82 +3,49 @@
 import { and, eq, isNull, sql, type SQL } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db";
-import {
-  gameParticipations,
-  games,
-  playerGameStatEvents,
-  playerGameStats,
-  players,
-  statEventTypeEnum,
-} from "@/db/schema";
+import { gameParticipations, games, playerGameStatEvents, playerGameStats, players } from "@/db/schema";
 import { getCurrentTeam } from "@/lib/team";
 import { isUuid } from "@/lib/uuid";
+import {
+  CARD_EVENTS,
+  COUNTER_EVENTS,
+  isCardEvent,
+  type CardColumn,
+  type CounterColumn,
+  type StatEvent,
+} from "./event-effects";
 
-export type StatEvent = (typeof statEventTypeEnum.enumValues)[number];
-
-type CardEvent = "YELLOW_CARD" | "RED_CARD";
-type CounterEvent = Exclude<StatEvent, CardEvent>;
-
-type CounterColumn =
-  | "shotsRegular"
-  | "goalsRegular"
-  | "shots7m"
-  | "goals7m"
-  | "shotsFacedRegular"
-  | "savesRegular"
-  | "shotsFaced7m"
-  | "saves7m"
-  | "twoMinPenalties";
-
-type CardColumn = "yellowCard" | "redCard";
-
-const COUNTER_EVENTS: Record<
-  CounterEvent,
-  { playerType: "FIELD" | "KEEPER" | null; columns: CounterColumn[] }
-> = {
-  SHOT_REGULAR_GOAL: { playerType: "FIELD", columns: ["shotsRegular", "goalsRegular"] },
-  SHOT_REGULAR_MISS: { playerType: "FIELD", columns: ["shotsRegular"] },
-  SHOT_7M_GOAL: { playerType: "FIELD", columns: ["shots7m", "goals7m"] },
-  SHOT_7M_MISS: { playerType: "FIELD", columns: ["shots7m"] },
-  SAVE_REGULAR: { playerType: "KEEPER", columns: ["shotsFacedRegular", "savesRegular"] },
-  GOAL_CONCEDED_REGULAR: { playerType: "KEEPER", columns: ["shotsFacedRegular"] },
-  SAVE_7M: { playerType: "KEEPER", columns: ["shotsFaced7m", "saves7m"] },
-  GOAL_CONCEDED_7M: { playerType: "KEEPER", columns: ["shotsFaced7m"] },
-  TWO_MIN_PENALTY: { playerType: null, columns: ["twoMinPenalties"] },
-};
-
-const CARD_EVENTS: Record<CardEvent, CardColumn> = {
-  YELLOW_CARD: "yellowCard",
-  RED_CARD: "redCard",
-};
-
-function isCardEvent(event: StatEvent): event is CardEvent {
-  return event === "YELLOW_CARD" || event === "RED_CARD";
-}
+// "closed" is its own reason (distinct from the catch-all "not_writable") because the offline queue
+// treats it specially: once a game is closed, every later queued action is doomed too, so the whole
+// remaining queue gets dropped at once. The other not_writable causes (session gone, wrong player
+// type, discipline hidden) are per-action and must not take the rest of the queue down with them.
+type WriteBlockReason = "closed" | "not_writable";
 
 // Shared by the record and undo paths so the two can't silently drift apart.
-function isGameOpenAndEventAllowed(
+function blockedReason(
   ownScore: number | null,
   opponentScore: number | null,
   event: StatEvent,
-): boolean {
-  if (ownScore !== null && opponentScore !== null) return false;
+): WriteBlockReason | null {
+  if (ownScore !== null && opponentScore !== null) return "closed";
   const disciplineHidden = process.env.HIDE_DISCIPLINE_STATS === "true";
-  if (disciplineHidden && (isCardEvent(event) || event === "TWO_MIN_PENALTY")) return false;
-  return true;
+  if (disciplineHidden && (isCardEvent(event) || event === "TWO_MIN_PENALTY")) return "not_writable";
+  return null;
 }
 
 // The physical (snake_case) column name backing a playerGameStats field. Only ever called with
-// keys from the fixed COUNTER_EVENTS/CARD_EVENTS maps above, never from client input.
+// keys from the fixed COUNTER_EVENTS/CARD_EVENTS maps in event-effects.ts, never from client input.
 function columnName(key: CounterColumn | CardColumn): string {
   return playerGameStats[key].name;
 }
 
-// Re-derives team/type/closed state from the DB; never trusts the client. Null if not writable now.
-async function resolveWritableParticipation(gameParticipationId: string, event: StatEvent) {
+type WritableParticipation = { ok: true; gameId: string } | { ok: false; reason: WriteBlockReason };
+
+// Re-derives team/type/closed state from the DB; never trusts the client.
+async function resolveWritableParticipation(gameParticipationId: string, event: StatEvent): Promise<WritableParticipation> {
   const team = await getCurrentTeam();
-  if (!team) return null;
-  if (!isUuid(gameParticipationId)) return null;
+  if (!team) return { ok: false, reason: "not_writable" };
+  if (!isUuid(gameParticipationId)) return { ok: false, reason: "not_writable" };
 
   const [participation] = await db
     .select({
@@ -98,20 +65,21 @@ async function resolveWritableParticipation(gameParticipationId: string, event: 
       ),
     );
 
-  if (!participation) return null;
-  if (!isGameOpenAndEventAllowed(participation.ownScore, participation.opponentScore, event)) return null;
+  if (!participation) return { ok: false, reason: "not_writable" };
+  const blocked = blockedReason(participation.ownScore, participation.opponentScore, event);
+  if (blocked) return { ok: false, reason: blocked };
 
   if (!isCardEvent(event)) {
     // COUNTER_EVENTS is a total Record, so this only guards a bad event string from a raw client call.
     const config = COUNTER_EVENTS[event];
-    if (!config) return null;
-    if (config.playerType && config.playerType !== participation.playerType) return null;
+    if (!config) return { ok: false, reason: "not_writable" };
+    if (config.playerType && config.playerType !== participation.playerType) return { ok: false, reason: "not_writable" };
   }
 
-  return { gameId: participation.gameId };
+  return { ok: true, gameId: participation.gameId };
 }
 
-export type RecordEventResult = { ok: true; id: string } | { ok: false; reason: "not_writable" | "no_op" };
+export type RecordEventResult = { ok: true; id: string } | { ok: false; reason: WriteBlockReason | "no_op" };
 
 // Inserts one persisted log row and updates the aggregate `playerGameStats` counters/booleans in a
 // single statement (neon-http has no db.transaction() — see src/db/index.ts). The log insert reads
@@ -119,8 +87,9 @@ export type RecordEventResult = { ok: true; id: string } | { ok: false; reason: 
 // that lost the race against the game closing, writes no log row either: the two can never fall out
 // of sync.
 export async function recordEvent(gameParticipationId: string, event: StatEvent): Promise<RecordEventResult> {
-  const participation = await resolveWritableParticipation(gameParticipationId, event);
-  if (!participation) return { ok: false, reason: "not_writable" };
+  const resolved = await resolveWritableParticipation(gameParticipationId, event);
+  if (!resolved.ok) return resolved;
+  const participation = resolved;
 
   // Re-checked here, atomically with the write itself: resolveWritableParticipation's check above ran
   // in a separate round trip, so a game could close in the gap between that check and this statement.
@@ -182,9 +151,7 @@ export async function recordEvent(gameParticipationId: string, event: StatEvent)
   return { ok: true, id: row.id };
 }
 
-export type UndoEventResult =
-  | { ok: true }
-  | { ok: false; reason: "not_found" | "already_undone" | "not_writable" };
+export type UndoEventResult = { ok: true } | { ok: false; reason: "not_found" | "already_undone" | WriteBlockReason };
 
 // Undoes one specific log entry by id (not just "the last tap"). Reverses exactly that entry's
 // effect on the aggregate: counters decrement (floored at 0), a card boolean only clears if no
@@ -210,9 +177,8 @@ export async function undoEventById(eventLogId: string): Promise<UndoEventResult
 
   // Not-found and not-yours are deliberately indistinguishable, matching resolveWritableParticipation.
   if (!row) return { ok: false, reason: "not_found" };
-  if (!isGameOpenAndEventAllowed(row.ownScore, row.opponentScore, row.eventType)) {
-    return { ok: false, reason: "not_writable" };
-  }
+  const blocked = blockedReason(row.ownScore, row.opponentScore, row.eventType);
+  if (blocked) return { ok: false, reason: blocked };
   if (row.undone) return { ok: false, reason: "already_undone" };
 
   let reverseSql: SQL;

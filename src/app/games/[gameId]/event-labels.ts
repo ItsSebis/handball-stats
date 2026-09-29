@@ -1,4 +1,4 @@
-import type { StatEvent } from "./actions";
+import type { StatEvent } from "./event-effects";
 
 export const EVENT_LABELS: Record<StatEvent, string> = {
   SHOT_REGULAR_GOAL: "Tor (Regulär)",

@@ -1,3 +1,4 @@
+import { SerwistProvider } from "@serwist/turbopack/react";
 import type { Metadata } from "next";
 import { Geist } from "next/font/google";
 import "./globals.css";
@@ -15,7 +16,9 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="de" className={`${geistSans.variable} antialiased`}>
-      <body>{children}</body>
+      <body>
+        <SerwistProvider swUrl="/serwist/sw.js">{children}</SerwistProvider>
+      </body>
     </html>
   );
 }
