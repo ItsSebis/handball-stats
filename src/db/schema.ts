@@ -1,4 +1,4 @@
-import { boolean, date, integer, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { boolean, date, index, integer, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -81,3 +81,34 @@ export const playerGameStats = pgTable("player_game_stats", {
   yellowCard: boolean("yellow_card").notNull().default(false),
   redCard: boolean("red_card").notNull().default(false),
 });
+
+export const statEventTypeEnum = pgEnum("stat_event_type", [
+  "SHOT_REGULAR_GOAL",
+  "SHOT_REGULAR_MISS",
+  "SHOT_7M_GOAL",
+  "SHOT_7M_MISS",
+  "SAVE_REGULAR",
+  "GOAL_CONCEDED_REGULAR",
+  "SAVE_7M",
+  "GOAL_CONCEDED_7M",
+  "TWO_MIN_PENALTY",
+  "YELLOW_CARD",
+  "RED_CARD",
+]);
+
+// Append-only log backing `playerGameStats`: one row per recorded tap, soft-deleted (never
+// hard-deleted) on undo so the aggregate counters stay reconstructable and auditable.
+export const playerGameStatEvents = pgTable(
+  "player_game_stat_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    gameParticipationId: uuid("game_participation_id")
+      .notNull()
+      .references(() => gameParticipations.id, { onDelete: "cascade" }),
+    eventType: statEventTypeEnum("event_type").notNull(),
+    undone: boolean("undone").notNull().default(false),
+    undoneAt: timestamp("undone_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("player_game_stat_events_game_participation_id_idx").on(table.gameParticipationId)],
+);

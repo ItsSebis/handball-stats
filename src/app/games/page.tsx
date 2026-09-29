@@ -1,6 +1,7 @@
 import { and, desc, eq } from "drizzle-orm";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { PageHeader } from "@/components/page-header";
 import { db } from "@/db";
 import { games, players, seasons } from "@/db/schema";
 import { getCurrentTeam } from "@/lib/team";
@@ -62,21 +63,23 @@ export default async function GamesPage() {
   }
 
   return (
-    <main className="flex min-h-screen flex-col items-center gap-8 px-4 py-8">
-      <h1 className="text-2xl font-semibold tracking-tight">Spiele</h1>
+    <main className="flex min-h-screen flex-col items-center">
+      <PageHeader title="Spiele" backHref="/dashboard" />
 
-      <ul className="flex w-full max-w-sm flex-col gap-1 text-sm">
-        {teamGames.map((game) => (
-          <li key={game.id}>
-            <Link href={`/games/${game.id}`} className="underline">
-              {game.date} – {game.opponentName} ({game.seasonLabel})
-              {game.ownScore !== null && game.opponentScore !== null && ` – ${game.ownScore}:${game.opponentScore}`}
-            </Link>
-          </li>
-        ))}
-      </ul>
+      <div className="flex w-full flex-col items-center gap-8 px-4 py-8">
+        <ul className="flex w-full max-w-sm flex-col gap-1 text-sm">
+          {teamGames.map((game) => (
+            <li key={game.id}>
+              <Link href={`/games/${game.id}`} className="underline">
+                {game.date} – {game.opponentName} ({game.seasonLabel})
+                {game.ownScore !== null && game.opponentScore !== null && ` – ${game.ownScore}:${game.opponentScore}`}
+              </Link>
+            </li>
+          ))}
+        </ul>
 
-      {content}
+        {content}
+      </div>
     </main>
   );
 }

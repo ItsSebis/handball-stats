@@ -1,13 +1,28 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useRef, useState } from "react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
 import { closeGame } from "./actions";
+
+const FORM_ID = "close-game-form";
 
 export function CloseGameForm({ gameId }: { gameId: string }) {
   const [error, formAction, pending] = useActionState(closeGame, undefined);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
 
   return (
-    <form action={formAction} className="flex w-full max-w-sm flex-col gap-4">
+    <form id={FORM_ID} ref={formRef} action={formAction} className="flex w-full max-w-sm flex-col gap-4">
       <input type="hidden" name="gameId" value={gameId} />
       <div className="flex items-center gap-3">
         <label className="flex flex-1 flex-col gap-1 text-sm">
@@ -17,7 +32,7 @@ export function CloseGameForm({ gameId }: { gameId: string }) {
             type="number"
             min={0}
             required
-            className="rounded border px-3 py-2"
+            className="rounded-lg border border-input bg-background px-3 py-2"
           />
         </label>
         <label className="flex flex-1 flex-col gap-1 text-sm">
@@ -27,18 +42,39 @@ export function CloseGameForm({ gameId }: { gameId: string }) {
             type="number"
             min={0}
             required
-            className="rounded border px-3 py-2"
+            className="rounded-lg border border-input bg-background px-3 py-2"
           />
         </label>
       </div>
-      {error && <p className="text-sm text-red-600">{error}</p>}
-      <button
-        type="submit"
+      {error && <p className="text-sm text-destructive">{error}</p>}
+
+      <Button
+        type="button"
         disabled={pending}
-        className="rounded bg-foreground px-4 py-2 text-background disabled:opacity-50"
+        onClick={() => {
+          // Native required-field validation before the confirm dialog covers the fields — otherwise
+          // the dialog opens over an invalid form and the browser's validation bubble has nothing
+          // visible to anchor to once the fields are hidden behind it.
+          if (formRef.current?.reportValidity()) setConfirmOpen(true);
+        }}
       >
         {pending ? "Wird beendet…" : "Spiel beenden"}
-      </button>
+      </Button>
+
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Spiel wirklich beenden?</AlertDialogTitle>
+            <AlertDialogDescription>Das kann nicht rückgängig gemacht werden.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+            <AlertDialogAction type="submit" form={FORM_ID} onClick={() => setConfirmOpen(false)}>
+              Spiel beenden
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </form>
   );
 }

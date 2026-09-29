@@ -1,6 +1,9 @@
+import { LogOut } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { signOut } from "@/auth";
+import { PageHeader } from "@/components/page-header";
+import { Button } from "@/components/ui/button";
 import { getCurrentTeam } from "@/lib/team";
 
 export default async function DashboardPage() {
@@ -8,9 +11,23 @@ export default async function DashboardPage() {
   if (!team) redirect("/login");
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-6 px-4 text-center">
-      <h1 className="text-2xl font-semibold tracking-tight">{team.name}</h1>
-      <nav className="flex flex-col gap-3">
+    <main className="flex min-h-screen flex-col items-center">
+      <PageHeader
+        title={team.name}
+        actions={
+          <form
+            action={async () => {
+              "use server";
+              await signOut({ redirectTo: "/login" });
+            }}
+          >
+            <Button variant="ghost" size="icon" type="submit" aria-label="Abmelden">
+              <LogOut />
+            </Button>
+          </form>
+        }
+      />
+      <nav className="flex flex-1 flex-col items-center justify-center gap-3">
         <Link href="/roster" className="underline">
           Kader
         </Link>
@@ -21,16 +38,6 @@ export default async function DashboardPage() {
           Spiele
         </Link>
       </nav>
-      <form
-        action={async () => {
-          "use server";
-          await signOut({ redirectTo: "/login" });
-        }}
-      >
-        <button type="submit" className="rounded border px-4 py-2">
-          Abmelden
-        </button>
-      </form>
     </main>
   );
 }

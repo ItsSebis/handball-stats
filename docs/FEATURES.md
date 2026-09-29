@@ -21,9 +21,9 @@ For each present player in a `Game`, log events as they happen:
 - Keepers: regular shot faced/save, or 7m shot faced/save.
 - Any player: 2-minute penalty, yellow card, red card.
 
-Each logged event increments the corresponding counter on that player's `PlayerGameStat` row (created on first event for that player in that game). Entry must work offline per the strategy in `ARCHITECTURE.md`. The coach enters the final score (`ownScore`/`opponentScore`) to close out the game.
+Live entry is action-first: the coach taps a top-level button for the event (e.g. Tor, Parade, 2-Min), then picks the player from a popup overlay filtered to eligible players (field players for field actions, keepers for keeper actions, everyone for discipline). Each logged event inserts a row into a persisted `PlayerGameStatEvent` log and increments the corresponding counter on that player's `PlayerGameStat` row (created on first event for that player in that game). Entry must work offline per the strategy in `ARCHITECTURE.md`. The coach enters the final score (`ownScore`/`opponentScore`) to close out the game.
 
-A mis-tap can be undone: each player's card has an "undo last event" action that reverses only the single most recent event logged for that player (per page session — not a full history/edit screen, see `OPEN_QUESTIONS.md`).
+A chronological event log (newest first) shows every event recorded this game, across all players. Any entry — not just the most recent one — can be undone independently via its own "Rückgängig" action; undone entries stay visible, marked as undone, rather than disappearing (see `DATA_MODEL.md`). A read-only per-player tally view stays available alongside the log, and is what a closed game shows in place of the action buttons.
 
 The 2-minute/yellow/red discipline controls can be hidden from this screen via the `HIDE_DISCIPLINE_STATS` env var (see `ARCHITECTURE.md`), for a team that already tracks discipline elsewhere and wants the space for other stats instead. This only affects what's shown/enterable — it doesn't remove the underlying counters from the data model.
 

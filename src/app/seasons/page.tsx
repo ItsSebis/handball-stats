@@ -1,5 +1,6 @@
 import { desc, eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
+import { PageHeader } from "@/components/page-header";
 import { db } from "@/db";
 import { seasons } from "@/db/schema";
 import { getCurrentTeam } from "@/lib/team";
@@ -21,18 +22,20 @@ export default async function SeasonsPage() {
     .orderBy(desc(seasons.startDate));
 
   return (
-    <main className="flex min-h-screen flex-col items-center gap-8 px-4 py-8">
-      <h1 className="text-2xl font-semibold tracking-tight">Saisons</h1>
+    <main className="flex min-h-screen flex-col items-center">
+      <PageHeader title="Saisons" backHref="/dashboard" />
 
-      <ul className="flex w-full max-w-sm flex-col gap-1 text-sm">
-        {teamSeasons.map((season) => (
-          <li key={season.id}>
-            {season.label} ({season.startDate} – {season.endDate})
-          </li>
-        ))}
-      </ul>
+      <div className="flex w-full flex-col items-center gap-6 px-4 py-8">
+        <ul className="flex w-full max-w-sm flex-col gap-1 text-sm">
+          {teamSeasons.map((season) => (
+            <li key={season.id}>
+              {season.label} ({season.startDate} – {season.endDate})
+            </li>
+          ))}
+        </ul>
 
-      <CreateSeasonForm />
+        <CreateSeasonForm />
+      </div>
     </main>
   );
 }
