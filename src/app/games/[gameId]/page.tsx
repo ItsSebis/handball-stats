@@ -1,11 +1,16 @@
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { notFound, redirect } from "next/navigation";
+import { Badge } from "@/components/ui/badge";
+import { PageHeader } from "@/components/page-header";
 import { db } from "@/db";
-import { gameParticipations, games, playerGameStats, players, seasons } from "@/db/schema";
+import { gameParticipations, games, playerGameStatEvents, playerGameStats, players, seasons } from "@/db/schema";
 import { getCurrentTeam } from "@/lib/team";
 import { isUuid } from "@/lib/uuid";
 import { CloseGameForm } from "./close-game-form";
-import { PlayerStatCard } from "./player-stat-card";
+import { EventLog, type GameEventLogEntry } from "./event-log";
+import { LiveGameView } from "./live-game-view";
+import type { Participant } from "./participant";
+import { TallyTable } from "./tally-table";
 
 export default async function GameDetailPage({ params }: { params: Promise<{ gameId: string }> }) {
   const team = await getCurrentTeam();
@@ -52,65 +57,81 @@ export default async function GameDetailPage({ params }: { params: Promise<{ gam
     .leftJoin(playerGameStats, eq(playerGameStats.gameParticipationId, gameParticipations.id))
     .where(and(eq(gameParticipations.gameId, game.id), eq(gameParticipations.present, true)));
 
-  const participants = rows.map((row) => ({
+  const participants: (Participant & { type: "FIELD" | "KEEPER" })[] = rows.map((row) => ({
     gameParticipationId: row.gameParticipationId,
     name: row.name,
     type: row.type,
-    counts: {
-      shotsRegular: row.shotsRegular ?? 0,
-      goalsRegular: row.goalsRegular ?? 0,
-      shots7m: row.shots7m ?? 0,
-      goals7m: row.goals7m ?? 0,
-      shotsFacedRegular: row.shotsFacedRegular ?? 0,
-      savesRegular: row.savesRegular ?? 0,
-      shotsFaced7m: row.shotsFaced7m ?? 0,
-      saves7m: row.saves7m ?? 0,
-      twoMinPenalties: row.twoMinPenalties ?? 0,
-      yellowCard: row.yellowCard ?? false,
-      redCard: row.redCard ?? false,
-    },
+    shotsRegular: row.shotsRegular ?? 0,
+    goalsRegular: row.goalsRegular ?? 0,
+    shots7m: row.shots7m ?? 0,
+    goals7m: row.goals7m ?? 0,
+    shotsFacedRegular: row.shotsFacedRegular ?? 0,
+    savesRegular: row.savesRegular ?? 0,
+    shotsFaced7m: row.shotsFaced7m ?? 0,
+    saves7m: row.saves7m ?? 0,
+    twoMinPenalties: row.twoMinPenalties ?? 0,
+    yellowCard: row.yellowCard ?? false,
+    redCard: row.redCard ?? false,
   }));
 
   const fieldPlayers = participants.filter((p) => p.type === "FIELD");
   const keepers = participants.filter((p) => p.type === "KEEPER");
   const showDiscipline = process.env.HIDE_DISCIPLINE_STATS !== "true";
 
+  const eventLogRows = await db
+    .select({
+      id: playerGameStatEvents.id,
+      eventType: playerGameStatEvents.eventType,
+      undone: playerGameStatEvents.undone,
+      createdAt: playerGameStatEvents.createdAt,
+      playerName: players.name,
+    })
+    .from(playerGameStatEvents)
+    .innerJoin(gameParticipations, eq(playerGameStatEvents.gameParticipationId, gameParticipations.id))
+    .innerJoin(players, eq(gameParticipations.playerId, players.id))
+    .where(eq(gameParticipations.gameId, game.id))
+    .orderBy(desc(playerGameStatEvents.createdAt));
+
+  const eventLog: GameEventLogEntry[] = eventLogRows.map((row) => ({
+    id: row.id,
+    eventType: row.eventType,
+    undone: row.undone,
+    createdAt: row.createdAt,
+    playerName: row.playerName,
+  }));
+
   return (
-    <main className="flex min-h-screen flex-col items-center gap-8 px-4 py-8">
-      <div className="flex flex-col items-center gap-1 text-center">
-        <h1 className="text-2xl font-semibold tracking-tight">{game.opponentName}</h1>
-        <p className="text-sm text-muted-foreground">
-          {game.date} · {game.seasonLabel}
-        </p>
-        {isClosed && <p className="text-lg font-medium">Endstand: {game.ownScore}:{game.opponentScore}</p>}
-      </div>
+    <main className="flex min-h-screen flex-col items-center">
+      <PageHeader
+        title={game.opponentName}
+        description={`${game.date} · ${game.seasonLabel}`}
+        backHref="/games"
+        actions={isClosed ? <Badge>{`${game.ownScore}:${game.opponentScore}`}</Badge> : undefined}
+      />
 
-      <div className="flex w-full max-w-sm flex-col gap-6">
-        <div className="flex flex-col gap-4">
-          <h2 className="font-medium">Feldspieler</h2>
-          {fieldPlayers.map((player) => (
-            <PlayerStatCard
-              key={player.gameParticipationId}
-              {...player}
-              closed={isClosed}
+      <div className="flex w-full flex-1 flex-col items-center gap-6 px-4 py-4">
+        {isClosed ? (
+          <div className="flex w-full max-w-sm flex-col gap-6">
+            <TallyTable fieldPlayers={fieldPlayers} keepers={keepers} showDiscipline={showDiscipline} />
+            <details className="text-sm">
+              <summary className="cursor-pointer text-muted-foreground">Verlauf anzeigen</summary>
+              <div className="mt-2">
+                <EventLog entries={eventLog} closed />
+              </div>
+            </details>
+          </div>
+        ) : (
+          <>
+            <LiveGameView
+              fieldPlayers={fieldPlayers}
+              keepers={keepers}
               showDiscipline={showDiscipline}
+              eventLog={eventLog}
             />
-          ))}
-        </div>
-        <div className="flex flex-col gap-4">
-          <h2 className="font-medium">Torhüter</h2>
-          {keepers.map((player) => (
-            <PlayerStatCard
-              key={player.gameParticipationId}
-              {...player}
-              closed={isClosed}
-              showDiscipline={showDiscipline}
-            />
-          ))}
-        </div>
+            <CloseGameForm gameId={game.id} />
+          </>
+        )}
       </div>
-
-      {!isClosed && <CloseGameForm gameId={game.id} />}
     </main>
   );
 }

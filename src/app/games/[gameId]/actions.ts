@@ -1,26 +1,23 @@
 "use server";
 
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, isNull, sql, type SQL } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db";
-import { gameParticipations, games, playerGameStats, players } from "@/db/schema";
+import {
+  gameParticipations,
+  games,
+  playerGameStatEvents,
+  playerGameStats,
+  players,
+  statEventTypeEnum,
+} from "@/db/schema";
 import { getCurrentTeam } from "@/lib/team";
 import { isUuid } from "@/lib/uuid";
 
-type CounterEvent =
-  | "SHOT_REGULAR_GOAL"
-  | "SHOT_REGULAR_MISS"
-  | "SHOT_7M_GOAL"
-  | "SHOT_7M_MISS"
-  | "SAVE_REGULAR"
-  | "GOAL_CONCEDED_REGULAR"
-  | "SAVE_7M"
-  | "GOAL_CONCEDED_7M"
-  | "TWO_MIN_PENALTY";
+export type StatEvent = (typeof statEventTypeEnum.enumValues)[number];
 
 type CardEvent = "YELLOW_CARD" | "RED_CARD";
-
-export type StatEvent = CounterEvent | CardEvent;
+type CounterEvent = Exclude<StatEvent, CardEvent>;
 
 type CounterColumn =
   | "shotsRegular"
@@ -32,6 +29,8 @@ type CounterColumn =
   | "shotsFaced7m"
   | "saves7m"
   | "twoMinPenalties";
+
+type CardColumn = "yellowCard" | "redCard";
 
 const COUNTER_EVENTS: Record<
   CounterEvent,
@@ -48,13 +47,19 @@ const COUNTER_EVENTS: Record<
   TWO_MIN_PENALTY: { playerType: null, columns: ["twoMinPenalties"] },
 };
 
-const CARD_EVENTS: Record<CardEvent, "yellowCard" | "redCard"> = {
+const CARD_EVENTS: Record<CardEvent, CardColumn> = {
   YELLOW_CARD: "yellowCard",
   RED_CARD: "redCard",
 };
 
 function isCardEvent(event: StatEvent): event is CardEvent {
   return event === "YELLOW_CARD" || event === "RED_CARD";
+}
+
+// The physical (snake_case) column name backing a playerGameStats field. Only ever called with
+// keys from the fixed COUNTER_EVENTS/CARD_EVENTS maps above, never from client input.
+function columnName(key: CounterColumn | CardColumn): string {
+  return playerGameStats[key].name;
 }
 
 // Re-derives team/type/closed state from the DB; never trusts the client. Null if not writable now.
@@ -97,64 +102,184 @@ async function resolveWritableParticipation(gameParticipationId: string, event: 
   return { gameId: participation.gameId };
 }
 
-// Returns whether the event actually changed anything, so the caller can decide it's now undoable.
-export async function recordEvent(gameParticipationId: string, event: StatEvent): Promise<boolean> {
+export type RecordedEvent = {
+  id: string;
+  gameParticipationId: string;
+  eventType: StatEvent;
+  createdAt: Date;
+  playerName: string;
+};
+
+export type RecordEventResult =
+  | { ok: true; entry: RecordedEvent }
+  | { ok: false; reason: "not_writable" | "no_op" };
+
+// Inserts one persisted log row and updates the aggregate `playerGameStats` counters/booleans in a
+// single statement (neon-http has no db.transaction() — see src/db/index.ts). The log insert reads
+// from the upsert CTE's own RETURNING output, so a card tap that's a no-op (already true) writes no
+// log row either: the two can never fall out of sync.
+export async function recordEvent(gameParticipationId: string, event: StatEvent): Promise<RecordEventResult> {
   const participation = await resolveWritableParticipation(gameParticipationId, event);
-  if (!participation) return false;
+  if (!participation) return { ok: false, reason: "not_writable" };
 
-  let applied: boolean;
-
+  let upsertSql: SQL;
   if (isCardEvent(event)) {
-    const column = CARD_EVENTS[event];
-    const rows = await db
-      .insert(playerGameStats)
-      .values({ gameParticipationId, [column]: true })
-      .onConflictDoUpdate({
-        target: playerGameStats.gameParticipationId,
-        set: { [column]: true },
-        setWhere: eq(playerGameStats[column], false),
-      })
-      .returning({ id: playerGameStats.gameParticipationId });
-    applied = rows.length > 0;
+    const col = columnName(CARD_EVENTS[event]);
+    upsertSql = sql`
+      INSERT INTO player_game_stats (game_participation_id, ${sql.raw(col)})
+      VALUES (${gameParticipationId}, true)
+      ON CONFLICT (game_participation_id) DO UPDATE SET ${sql.raw(col)} = true
+      WHERE player_game_stats.${sql.raw(col)} = false
+      RETURNING game_participation_id
+    `;
   } else {
     const { columns } = COUNTER_EVENTS[event];
-    const insertValues = Object.fromEntries(columns.map((column) => [column, 1]));
-    const updateSet = Object.fromEntries(
-      columns.map((column) => [column, sql`${playerGameStats[column]} + 1`]),
+    const insertCols = sql.join(
+      columns.map((c) => sql.raw(columnName(c))),
+      sql`, `,
     );
-    await db
-      .insert(playerGameStats)
-      .values({ gameParticipationId, ...insertValues })
-      .onConflictDoUpdate({ target: playerGameStats.gameParticipationId, set: updateSet });
-    applied = true;
+    const insertVals = sql.join(
+      columns.map(() => sql`1`),
+      sql`, `,
+    );
+    const updateSet = sql.join(
+      columns.map((c) => {
+        const name = columnName(c);
+        return sql`${sql.raw(name)} = player_game_stats.${sql.raw(name)} + 1`;
+      }),
+      sql`, `,
+    );
+    upsertSql = sql`
+      INSERT INTO player_game_stats (game_participation_id, ${insertCols})
+      VALUES (${gameParticipationId}, ${insertVals})
+      ON CONFLICT (game_participation_id) DO UPDATE SET ${updateSet}
+      RETURNING game_participation_id
+    `;
   }
 
-  if (applied) revalidatePath(`/games/${participation.gameId}`);
-  return applied;
-}
+  const result = await db.execute<{
+    id: string;
+    created_at: Date;
+    game_participation_id: string;
+    event_type: StatEvent;
+    player_name: string;
+  }>(sql`
+    WITH upserted AS (${upsertSql}),
+    log AS (
+      INSERT INTO player_game_stat_events (game_participation_id, event_type)
+      SELECT game_participation_id, ${event} FROM upserted
+      RETURNING id, created_at, game_participation_id, event_type
+    )
+    SELECT log.id, log.created_at, log.game_participation_id, log.event_type, players.name AS player_name
+    FROM log
+    JOIN game_participations gp ON gp.id = log.game_participation_id
+    JOIN players ON players.id = gp.player_id
+  `);
 
-export async function undoEvent(gameParticipationId: string, event: StatEvent) {
-  const participation = await resolveWritableParticipation(gameParticipationId, event);
-  if (!participation) return;
-
-  let updateSet: Record<string, unknown>;
-
-  if (isCardEvent(event)) {
-    const column = CARD_EVENTS[event];
-    updateSet = { [column]: false };
-  } else {
-    const { columns } = COUNTER_EVENTS[event];
-    updateSet = Object.fromEntries(
-      columns.map((column) => [column, sql`greatest(${playerGameStats[column]} - 1, 0)`]),
-    );
-  }
-
-  await db
-    .update(playerGameStats)
-    .set(updateSet)
-    .where(eq(playerGameStats.gameParticipationId, gameParticipationId));
+  const row = result.rows[0];
+  if (!row) return { ok: false, reason: "no_op" };
 
   revalidatePath(`/games/${participation.gameId}`);
+  return {
+    ok: true,
+    entry: {
+      id: row.id,
+      gameParticipationId: row.game_participation_id,
+      eventType: row.event_type,
+      createdAt: new Date(row.created_at),
+      playerName: row.player_name,
+    },
+  };
+}
+
+export type UndoEventResult =
+  | { ok: true }
+  | { ok: false; reason: "not_found" | "already_undone" | "not_writable" };
+
+// Undoes one specific log entry by id (not just "the last tap"). Reverses exactly that entry's
+// effect on the aggregate: counters decrement (floored at 0), a card boolean only clears if no
+// *other* non-undone entry of the same type remains for that participation (a card can be logged,
+// undone, and re-logged over a game; only the currently-active entry's undo should clear it).
+export async function undoEventById(eventLogId: string): Promise<UndoEventResult> {
+  const team = await getCurrentTeam();
+  if (!team) return { ok: false, reason: "not_found" };
+  if (!isUuid(eventLogId)) return { ok: false, reason: "not_found" };
+
+  const [row] = await db
+    .select({
+      eventType: playerGameStatEvents.eventType,
+      undone: playerGameStatEvents.undone,
+      gameId: gameParticipations.gameId,
+      ownScore: games.ownScore,
+      opponentScore: games.opponentScore,
+    })
+    .from(playerGameStatEvents)
+    .innerJoin(gameParticipations, eq(playerGameStatEvents.gameParticipationId, gameParticipations.id))
+    .innerJoin(games, eq(gameParticipations.gameId, games.id))
+    .where(and(eq(playerGameStatEvents.id, eventLogId), eq(games.teamId, team.id)));
+
+  // Not-found and not-yours are deliberately indistinguishable, matching resolveWritableParticipation.
+  if (!row) return { ok: false, reason: "not_found" };
+  if (row.ownScore !== null && row.opponentScore !== null) return { ok: false, reason: "not_writable" };
+
+  const disciplineHidden = process.env.HIDE_DISCIPLINE_STATS === "true";
+  if (disciplineHidden && (isCardEvent(row.eventType) || row.eventType === "TWO_MIN_PENALTY")) {
+    return { ok: false, reason: "not_writable" };
+  }
+  if (row.undone) return { ok: false, reason: "already_undone" };
+
+  let reverseSql: SQL;
+  if (isCardEvent(row.eventType)) {
+    const col = columnName(CARD_EVENTS[row.eventType]);
+    reverseSql = sql`
+      UPDATE player_game_stats p
+      SET ${sql.raw(col)} = CASE
+        WHEN NOT EXISTS (
+          SELECT 1 FROM player_game_stat_events e
+          WHERE e.game_participation_id = flipped.game_participation_id
+            AND e.event_type = ${row.eventType}
+            AND e.undone = false
+            AND e.id <> ${eventLogId}
+        ) THEN false ELSE p.${sql.raw(col)} END
+      FROM flipped
+      WHERE p.game_participation_id = flipped.game_participation_id
+      RETURNING p.game_participation_id
+    `;
+  } else {
+    const { columns } = COUNTER_EVENTS[row.eventType];
+    const updateSet = sql.join(
+      columns.map((c) => {
+        const name = columnName(c);
+        return sql`${sql.raw(name)} = greatest(p.${sql.raw(name)} - 1, 0)`;
+      }),
+      sql`, `,
+    );
+    reverseSql = sql`
+      UPDATE player_game_stats p
+      SET ${updateSet}
+      FROM flipped
+      WHERE p.game_participation_id = flipped.game_participation_id
+      RETURNING p.game_participation_id
+    `;
+  }
+
+  // Excluding the flipped row by id (rather than relying on `undone = false` alone) matters: sibling
+  // data-modifying CTEs share one snapshot and don't see each other's writes, so the NOT EXISTS check
+  // above would not see this UPDATE's own `undone = true` if it re-queried by state instead of by id.
+  const result = await db.execute<{ game_participation_id: string }>(sql`
+    WITH flipped AS (
+      UPDATE player_game_stat_events
+      SET undone = true, undone_at = now()
+      WHERE id = ${eventLogId} AND undone = false
+      RETURNING game_participation_id
+    )
+    ${reverseSql}
+  `);
+
+  if (result.rows.length === 0) return { ok: false, reason: "already_undone" };
+
+  revalidatePath(`/games/${row.gameId}`);
+  return { ok: true };
 }
 
 export async function closeGame(_prevState: string | undefined, formData: FormData) {

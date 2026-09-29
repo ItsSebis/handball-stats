@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
+import { PageHeader } from "@/components/page-header";
 import { db } from "@/db";
 import { players } from "@/db/schema";
 import { getCurrentTeam } from "@/lib/team";
@@ -18,29 +19,31 @@ export default async function RosterPage() {
   const keepers = roster.filter((player) => player.type === "KEEPER");
 
   return (
-    <main className="flex min-h-screen flex-col items-center gap-8 px-4 py-8">
-      <h1 className="text-2xl font-semibold tracking-tight">Kader</h1>
+    <main className="flex min-h-screen flex-col items-center">
+      <PageHeader title="Kader" backHref="/dashboard" />
 
-      <div className="flex w-full max-w-sm flex-col gap-4 text-sm">
-        <div>
-          <h2 className="font-medium">Feldspieler</h2>
-          <ul className="list-inside list-disc">
-            {fieldPlayers.map((player) => (
-              <li key={player.id}>{player.name}</li>
-            ))}
-          </ul>
+      <div className="flex w-full flex-col items-center gap-6 px-4 py-8">
+        <div className="flex w-full max-w-sm flex-col gap-4 text-sm">
+          <div>
+            <h2 className="font-medium">Feldspieler</h2>
+            <ul className="list-inside list-disc">
+              {fieldPlayers.map((player) => (
+                <li key={player.id}>{player.name}</li>
+              ))}
+            </ul>
+          </div>
+          <div>
+            <h2 className="font-medium">Torhüter</h2>
+            <ul className="list-inside list-disc">
+              {keepers.map((player) => (
+                <li key={player.id}>{player.name}</li>
+              ))}
+            </ul>
+          </div>
         </div>
-        <div>
-          <h2 className="font-medium">Torhüter</h2>
-          <ul className="list-inside list-disc">
-            {keepers.map((player) => (
-              <li key={player.id}>{player.name}</li>
-            ))}
-          </ul>
-        </div>
+
+        <ImportPlayersForm />
       </div>
-
-      <ImportPlayersForm />
     </main>
   );
 }

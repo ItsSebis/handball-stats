@@ -31,9 +31,9 @@ Build order. Each phase is a **major, working milestone** the next phase builds 
 
 ## Phase 4 — Live stat entry (online)
 
-- Schema: `PlayerGameStat`.
-- Per-player stat entry UI: regular/7m shots+goals (field players), regular/7m shots-faced+saves (keepers), 2-min/yellow/red (per `FEATURES.md` #4).
-- Per-player "undo last event" for correcting a mis-tap.
+- Schema: `PlayerGameStat`, `PlayerGameStatEvent`.
+- Live stat entry UI: tap a top-level action button (Tor/Kein Tor/7m Tor/7m Kein Tor for field players; Parade/Gegentor/7m Parade/7m Gegentor for keepers; 2-min/yellow/red discipline) then pick the player from a popup, per `FEATURES.md` #4.
+- Per-entry undo via a persisted, timestamped event log (`PlayerGameStatEvent`) spanning the whole game — pulls forward Phase 7's deferred full correction screen; see `DATA_MODEL.md`/`OPEN_QUESTIONS.md`.
 - Closing a game with the final score.
 - No offline handling yet — assume connectivity.
 - **Milestone**: a coach can fully record and close out a real game's stats while online.
@@ -56,7 +56,6 @@ Build order. Each phase is a **major, working milestone** the next phase builds 
 Only after phases 0–6 are solid and in real use. Resolve items from `OPEN_QUESTIONS.md` as they become actually relevant — not preemptively:
 - Chart-type refinement.
 - Install-prompt UX.
-- Full stat-entry correction/edit screen (beyond the per-player undo-last already in Phase 4).
 - Any other item from `OPEN_QUESTIONS.md` the user raises.
 
 ## Phase 8 — Admin tooling
