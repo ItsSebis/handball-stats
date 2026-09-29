@@ -62,3 +62,22 @@ export const gameParticipations = pgTable("game_participations", {
     .references(() => players.id, { onDelete: "cascade" }),
   present: boolean("present").notNull(),
 });
+
+export const playerGameStats = pgTable("player_game_stats", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  gameParticipationId: uuid("game_participation_id")
+    .notNull()
+    .unique()
+    .references(() => gameParticipations.id, { onDelete: "cascade" }),
+  shotsRegular: integer("shots_regular").notNull().default(0),
+  goalsRegular: integer("goals_regular").notNull().default(0),
+  shots7m: integer("shots_7m").notNull().default(0),
+  goals7m: integer("goals_7m").notNull().default(0),
+  shotsFacedRegular: integer("shots_faced_regular").notNull().default(0),
+  savesRegular: integer("saves_regular").notNull().default(0),
+  shotsFaced7m: integer("shots_faced_7m").notNull().default(0),
+  saves7m: integer("saves_7m").notNull().default(0),
+  twoMinPenalties: integer("two_min_penalties").notNull().default(0),
+  yellowCard: boolean("yellow_card").notNull().default(false),
+  redCard: boolean("red_card").notNull().default(false),
+});
