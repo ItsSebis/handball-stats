@@ -72,3 +72,9 @@ Only after phases 0–6 are solid and in real use. Resolve items from `OPEN_QUES
 - Signup sends a confirmation email with a verification link.
 - "Forgot password" flow: coach requests a reset email, follows a single-use link, sets a new password.
 - **Milestone**: a coach receives a real confirmation email on signup, and can self-serve a password reset by email without the admin's help — the admin-driven reset from Phase 8 remains as a fallback.
+
+## Phase 10 — Detailed shot-type tracking
+
+- Extend live stat entry (Phase 4) beyond a plain goal/miss per attempt to also capture *how* the shot was taken: e.g. Durchbruch (breakthrough), Sprungwurf/Rückraum, Außen (wing), Kreis (pivot/6m), über die Abwehr (over the defense), 6m frei (ohne Gegnereinwirkung), Schlagwurf, Gegenstoß/Tempogegenstoß — a starting list; finalize the exact taxonomy when this phase is planned (see `OPEN_QUESTIONS.md`).
+- Applies symmetrically to keepers: a save/goal-conceded should also record which shot type it was against, not just field players' attempts.
+- **Milestone**: a coach can tag each recorded shot with its type, and later see stats broken down by shot type instead of only an aggregate goal/miss ratio.

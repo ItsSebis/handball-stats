@@ -23,6 +23,8 @@ For each present player in a `Game`, log events as they happen:
 
 Each logged event increments the corresponding counter on that player's `PlayerGameStat` row (created on first event for that player in that game). Entry must work offline per the strategy in `ARCHITECTURE.md`. The coach enters the final score (`ownScore`/`opponentScore`) to close out the game.
 
+A mis-tap can be undone: each player's card has an "undo last event" action that reverses only the single most recent event logged for that player (per page session — not a full history/edit screen, see `OPEN_QUESTIONS.md`).
+
 The 2-minute/yellow/red discipline controls can be hidden from this screen via the `HIDE_DISCIPLINE_STATS` env var (see `ARCHITECTURE.md`), for a team that already tracks discipline elsewhere and wants the space for other stats instead. This only affects what's shown/enterable — it doesn't remove the underlying counters from the data model.
 
 ## 5. Team overview (account dashboard)
