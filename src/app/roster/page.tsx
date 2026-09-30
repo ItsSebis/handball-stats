@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/page-header";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { db } from "@/db";
 import { players } from "@/db/schema";
 import { getCurrentTeam } from "@/lib/team";
@@ -23,23 +24,31 @@ export default async function RosterPage() {
       <PageHeader title="Kader" backHref="/dashboard" />
 
       <div className="flex w-full flex-col items-center gap-6 px-4 py-8">
-        <div className="flex w-full max-w-sm flex-col gap-4 text-sm">
-          <div>
-            <h2 className="font-medium">Feldspieler</h2>
-            <ul className="list-inside list-disc">
-              {fieldPlayers.map((player) => (
-                <li key={player.id}>{player.name}</li>
-              ))}
-            </ul>
-          </div>
-          <div>
-            <h2 className="font-medium">Torhüter</h2>
-            <ul className="list-inside list-disc">
-              {keepers.map((player) => (
-                <li key={player.id}>{player.name}</li>
-              ))}
-            </ul>
-          </div>
+        <div className="flex w-full max-w-sm flex-col gap-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Feldspieler</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ul className="text-sm">
+                {fieldPlayers.map((player) => (
+                  <li key={player.id}>{player.name}</li>
+                ))}
+              </ul>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>Torhüter</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ul className="text-sm">
+                {keepers.map((player) => (
+                  <li key={player.id}>{player.name}</li>
+                ))}
+              </ul>
+            </CardContent>
+          </Card>
         </div>
 
         <ImportPlayersForm />

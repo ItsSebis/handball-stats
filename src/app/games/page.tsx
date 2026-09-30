@@ -2,6 +2,8 @@ import { and, desc, eq } from "drizzle-orm";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/page-header";
+import { Badge } from "@/components/ui/badge";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { db } from "@/db";
 import { games, players, seasons } from "@/db/schema";
 import { getCurrentTeam } from "@/lib/team";
@@ -67,16 +69,35 @@ export default async function GamesPage() {
       <PageHeader title="Spiele" backHref="/dashboard" />
 
       <div className="flex w-full flex-col items-center gap-8 px-4 py-8">
-        <ul className="flex w-full max-w-sm flex-col gap-1 text-sm">
-          {teamGames.map((game) => (
-            <li key={game.id}>
-              <Link href={`/games/${game.id}`} className="underline">
-                {game.date} – {game.opponentName} ({game.seasonLabel})
-                {game.ownScore !== null && game.opponentScore !== null && ` – ${game.ownScore}:${game.opponentScore}`}
-              </Link>
-            </li>
-          ))}
-        </ul>
+        <div className="w-full max-w-sm">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Datum</TableHead>
+                <TableHead>Gegner</TableHead>
+                <TableHead>Saison</TableHead>
+                <TableHead>Ergebnis</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {teamGames.map((game) => {
+                const isClosed = game.ownScore !== null && game.opponentScore !== null;
+                return (
+                  <TableRow key={game.id} className="relative">
+                    <TableCell>
+                      <Link href={`/games/${game.id}`} className="after:absolute after:inset-0">
+                        {game.date}
+                      </Link>
+                    </TableCell>
+                    <TableCell>{game.opponentName}</TableCell>
+                    <TableCell>{game.seasonLabel}</TableCell>
+                    <TableCell>{isClosed && <Badge>{`${game.ownScore}:${game.opponentScore}`}</Badge>}</TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </div>
 
         {content}
       </div>
