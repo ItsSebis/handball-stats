@@ -21,7 +21,7 @@ export function LeaderboardCard({
         ) : (
           <ol className="flex flex-col gap-1 text-sm">
             {entries.map((entry, index) => (
-              <li key={entry.name}>
+              <li key={entry.playerId}>
                 {index + 1}. {entry.name} — {entry.value} {unit}
               </li>
             ))}

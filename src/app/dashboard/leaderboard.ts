@@ -1,10 +1,10 @@
 import type { PlayerStats } from "../stats/queries";
 
-export type LeaderboardEntry = { name: string; value: number };
+export type LeaderboardEntry = { playerId: string; name: string; value: number };
 
 function topBy(players: PlayerStats[], value: (player: PlayerStats) => number): LeaderboardEntry[] {
   return players
-    .map((player) => ({ name: player.name, value: value(player) }))
+    .map((player) => ({ playerId: player.playerId, name: player.name, value: value(player) }))
     .filter((entry) => entry.value > 0)
     .sort((a, b) => b.value - a.value) // stable sort + getPlayerStats' asc(players.name) input order => name-ascending tiebreak
     .slice(0, 3);

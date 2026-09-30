@@ -41,7 +41,7 @@ export function DeleteGameForm({ gameId }: { gameId: string }) {
         {error && <p className="text-sm text-destructive">{error}</p>}
         <AlertDialogFooter>
           <AlertDialogCancel>Abbrechen</AlertDialogCancel>
-          <AlertDialogAction type="submit" form={FORM_ID} variant="destructive">
+          <AlertDialogAction type="submit" form={FORM_ID} variant="destructive" disabled={pending}>
             Löschen
           </AlertDialogAction>
         </AlertDialogFooter>

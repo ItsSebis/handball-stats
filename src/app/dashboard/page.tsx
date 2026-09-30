@@ -48,7 +48,7 @@ export default async function DashboardPage() {
       />
 
       <div className="flex w-full flex-1 flex-col items-center gap-6 px-4 py-4">
-        <div className="grid w-full max-w-sm grid-cols-4 gap-2">
+        <div className="grid w-full max-w-sm grid-cols-2 gap-2">
           <Button variant="outline" nativeButton={false} render={<Link href="/roster" />}>
             Kader
           </Button>

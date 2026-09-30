@@ -6,7 +6,8 @@ import type { Participant } from "./[gameId]/participant";
 export type GameTally = { fieldPlayers: Participant[]; keepers: Participant[] };
 
 // NOT team-scoped — callers must independently verify the game belongs to the current team
-// before calling this (see games/[gameId]/page.tsx's own team-scoped lookup above its call site).
+// before calling this. Callers: games/[gameId]/page.tsx (its own team-scoped lookup above its
+// call site) and dashboard/page.tsx (via getMostRecentGame(team.id) below).
 export async function getGameTally(gameId: string): Promise<GameTally> {
   const rows = await db
     .select({
@@ -62,7 +63,7 @@ export type MostRecentGame = {
   opponentScore: number | null;
 };
 
-// Not consumed yet — added for the Phase 10 home page dashboard widget (Task 5).
+// Used by the Phase 10 home page dashboard widget (dashboard/page.tsx, Task 5).
 export async function getMostRecentGame(teamId: string): Promise<MostRecentGame | null> {
   const [game] = await db
     .select({

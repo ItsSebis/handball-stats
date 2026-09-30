@@ -52,10 +52,12 @@ export async function changeEmail(_prevState: string | undefined, formData: Form
   if (!newEmail.includes("@")) return "Bitte eine gültige E-Mail-Adresse angeben.";
 
   const [user] = await db
-    .select({ passwordHash: users.passwordHash })
+    .select({ email: users.email, passwordHash: users.passwordHash })
     .from(users)
     .where(eq(users.id, session.user.id));
   if (!user) return "Nicht angemeldet.";
+
+  if (newEmail === user.email) return "Das ist bereits deine E-Mail-Adresse.";
 
   const valid = await verifyPassword(currentPassword, user.passwordHash);
   if (!valid) return "Aktuelles Passwort ist falsch.";

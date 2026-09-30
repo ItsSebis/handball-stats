@@ -41,7 +41,7 @@ export function ReopenGameForm({ gameId }: { gameId: string }) {
         {error && <p className="text-sm text-destructive">{error}</p>}
         <AlertDialogFooter>
           <AlertDialogCancel>Abbrechen</AlertDialogCancel>
-          <AlertDialogAction type="submit" form={FORM_ID} variant="outline">
+          <AlertDialogAction type="submit" form={FORM_ID} variant="outline" disabled={pending}>
             Spiel wieder öffnen
           </AlertDialogAction>
         </AlertDialogFooter>

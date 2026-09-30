@@ -21,7 +21,7 @@ function player(overrides: Partial<PlayerStats> & { name: string }): PlayerStats
 describe("topScorers", () => {
   it("sums regular and 7m goals into a total", () => {
     const players = [player({ name: "Anna", goalsRegular: 3, goals7m: 2 })];
-    expect(topScorers(players)).toEqual([{ name: "Anna", value: 5 }]);
+    expect(topScorers(players)).toEqual([{ playerId: "Anna", name: "Anna", value: 5 }]);
   });
 
   it("filters out players with zero goals", () => {
@@ -29,7 +29,7 @@ describe("topScorers", () => {
       player({ name: "Anna", goalsRegular: 3 }),
       player({ name: "Bea", goalsRegular: 0, goals7m: 0 }),
     ];
-    expect(topScorers(players)).toEqual([{ name: "Anna", value: 3 }]);
+    expect(topScorers(players)).toEqual([{ playerId: "Anna", name: "Anna", value: 3 }]);
   });
 
   it("sorts descending by total", () => {
@@ -39,9 +39,9 @@ describe("topScorers", () => {
       player({ name: "Clara", goalsRegular: 5 }),
     ];
     expect(topScorers(players)).toEqual([
-      { name: "Bea", value: 8 },
-      { name: "Clara", value: 5 },
-      { name: "Anna", value: 2 },
+      { playerId: "Bea", name: "Bea", value: 8 },
+      { playerId: "Clara", name: "Clara", value: 5 },
+      { playerId: "Anna", name: "Anna", value: 2 },
     ]);
   });
 
@@ -54,9 +54,9 @@ describe("topScorers", () => {
       player({ name: "Clara", goalsRegular: 4 }),
     ];
     expect(topScorers(players)).toEqual([
-      { name: "Anna", value: 4 },
-      { name: "Bea", value: 4 },
-      { name: "Clara", value: 4 },
+      { playerId: "Anna", name: "Anna", value: 4 },
+      { playerId: "Bea", name: "Bea", value: 4 },
+      { playerId: "Clara", name: "Clara", value: 4 },
     ]);
   });
 
@@ -69,9 +69,9 @@ describe("topScorers", () => {
       player({ name: "Eva", goalsRegular: 2 }),
     ];
     expect(topScorers(players)).toEqual([
-      { name: "Bea", value: 5 },
-      { name: "Clara", value: 4 },
-      { name: "Dora", value: 3 },
+      { playerId: "Bea", name: "Bea", value: 5 },
+      { playerId: "Clara", name: "Clara", value: 4 },
+      { playerId: "Dora", name: "Dora", value: 3 },
     ]);
   });
 });
@@ -79,7 +79,7 @@ describe("topScorers", () => {
 describe("topKeepers", () => {
   it("sums regular and 7m saves into a total", () => {
     const players = [player({ name: "Nina", type: "KEEPER", savesRegular: 6, saves7m: 1 })];
-    expect(topKeepers(players)).toEqual([{ name: "Nina", value: 7 }]);
+    expect(topKeepers(players)).toEqual([{ playerId: "Nina", name: "Nina", value: 7 }]);
   });
 
   it("filters out players with zero saves", () => {
@@ -87,6 +87,6 @@ describe("topKeepers", () => {
       player({ name: "Nina", type: "KEEPER", savesRegular: 6 }),
       player({ name: "Olli", type: "KEEPER", savesRegular: 0, saves7m: 0 }),
     ];
-    expect(topKeepers(players)).toEqual([{ name: "Nina", value: 6 }]);
+    expect(topKeepers(players)).toEqual([{ playerId: "Nina", name: "Nina", value: 6 }]);
   });
 });
