@@ -35,6 +35,15 @@ export async function sendVerificationEmail(to: string, token: string): Promise<
   );
 }
 
+export async function sendEmailChangeConfirmation(to: string, token: string): Promise<void> {
+  const link = `${getBaseUrl()}/verify-email?token=${token}`;
+  await sendEmail(
+    to,
+    "Bestätige deine neue E-Mail-Adresse",
+    `<p>Du hast die E-Mail-Adresse für dein Handball Stats-Konto geändert. Bitte bestätige die neue Adresse:</p><p><a href="${link}">${link}</a></p><p>Falls du das nicht warst, kontaktiere bitte umgehend deinen Verein.</p>`,
+  );
+}
+
 export async function sendPasswordResetEmail(to: string, token: string): Promise<void> {
   const link = `${getBaseUrl()}/reset-password?token=${token}`;
   await sendEmail(
