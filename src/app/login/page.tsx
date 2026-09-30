@@ -35,6 +35,11 @@ export default function LoginPage() {
         </button>
       </form>
       <p className="text-sm">
+        <Link href="/forgot-password" className="underline">
+          Passwort vergessen?
+        </Link>
+      </p>
+      <p className="text-sm">
         Noch kein Team?{" "}
         <Link href="/signup" className="underline">
           Registrieren
