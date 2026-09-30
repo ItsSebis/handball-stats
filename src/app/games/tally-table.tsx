@@ -1,6 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import type { Participant } from "./participant";
+import type { Participant } from "./[gameId]/participant";
 
 function DisciplineBadges({ twoMinPenalties, yellowCard, redCard }: Pick<Participant, "twoMinPenalties" | "yellowCard" | "redCard">) {
   if (!twoMinPenalties && !yellowCard && !redCard) {

@@ -3,14 +3,14 @@ import { notFound, redirect } from "next/navigation";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { db } from "@/db";
-import { gameParticipations, games, playerGameStatEvents, playerGameStats, players, seasons } from "@/db/schema";
+import { gameParticipations, games, playerGameStatEvents, players, seasons } from "@/db/schema";
 import { getCurrentTeam } from "@/lib/team";
 import { isUuid } from "@/lib/uuid";
+import { getGameTally } from "../queries";
+import { TallyTable } from "../tally-table";
 import { CloseGameForm } from "./close-game-form";
 import { EventLog, type GameEventLogEntry } from "./event-log";
 import { LiveGameView } from "./live-game-view";
-import type { Participant } from "./participant";
-import { TallyTable } from "./tally-table";
 
 export default async function GameDetailPage({ params }: { params: Promise<{ gameId: string }> }) {
   const team = await getCurrentTeam();
@@ -35,47 +35,7 @@ export default async function GameDetailPage({ params }: { params: Promise<{ gam
 
   const isClosed = game.ownScore !== null && game.opponentScore !== null;
 
-  const rows = await db
-    .select({
-      gameParticipationId: gameParticipations.id,
-      name: players.name,
-      type: players.type,
-      shotsRegular: playerGameStats.shotsRegular,
-      goalsRegular: playerGameStats.goalsRegular,
-      shots7m: playerGameStats.shots7m,
-      goals7m: playerGameStats.goals7m,
-      shotsFacedRegular: playerGameStats.shotsFacedRegular,
-      savesRegular: playerGameStats.savesRegular,
-      shotsFaced7m: playerGameStats.shotsFaced7m,
-      saves7m: playerGameStats.saves7m,
-      twoMinPenalties: playerGameStats.twoMinPenalties,
-      yellowCard: playerGameStats.yellowCard,
-      redCard: playerGameStats.redCard,
-    })
-    .from(gameParticipations)
-    .innerJoin(players, eq(gameParticipations.playerId, players.id))
-    .leftJoin(playerGameStats, eq(playerGameStats.gameParticipationId, gameParticipations.id))
-    .where(and(eq(gameParticipations.gameId, game.id), eq(gameParticipations.present, true)));
-
-  const participants: (Participant & { type: "FIELD" | "KEEPER" })[] = rows.map((row) => ({
-    gameParticipationId: row.gameParticipationId,
-    name: row.name,
-    type: row.type,
-    shotsRegular: row.shotsRegular ?? 0,
-    goalsRegular: row.goalsRegular ?? 0,
-    shots7m: row.shots7m ?? 0,
-    goals7m: row.goals7m ?? 0,
-    shotsFacedRegular: row.shotsFacedRegular ?? 0,
-    savesRegular: row.savesRegular ?? 0,
-    shotsFaced7m: row.shotsFaced7m ?? 0,
-    saves7m: row.saves7m ?? 0,
-    twoMinPenalties: row.twoMinPenalties ?? 0,
-    yellowCard: row.yellowCard ?? false,
-    redCard: row.redCard ?? false,
-  }));
-
-  const fieldPlayers = participants.filter((p) => p.type === "FIELD");
-  const keepers = participants.filter((p) => p.type === "KEEPER");
+  const { fieldPlayers, keepers } = await getGameTally(game.id);
   const showDiscipline = process.env.HIDE_DISCIPLINE_STATS !== "true";
 
   const eventLog: GameEventLogEntry[] = await db

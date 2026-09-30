@@ -5,7 +5,7 @@ import { ActionButtons } from "./action-buttons";
 import { EventLog, type GameEventLogEntry } from "./event-log";
 import { OnlineStatusBanner } from "./online-status";
 import type { Participant } from "./participant";
-import { TallyTable } from "./tally-table";
+import { TallyTable } from "../tally-table";
 import { useOfflineQueue } from "./use-offline-queue";
 
 export function LiveGameView({
