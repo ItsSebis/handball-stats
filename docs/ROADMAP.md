@@ -78,3 +78,10 @@ Only after phases 0–6 are solid and in real use. Resolve items from `OPEN_QUES
 - Extend live stat entry (Phase 4) beyond a plain goal/miss per attempt to also capture *how* the shot was taken: e.g. Durchbruch (breakthrough), Sprungwurf/Rückraum, Außen (wing), Kreis (pivot/6m), über die Abwehr (over the defense), 6m frei (ohne Gegnereinwirkung), Schlagwurf, Gegenstoß/Tempogegenstoß — a starting list; finalize the exact taxonomy when this phase is planned (see `OPEN_QUESTIONS.md`).
 - Applies symmetrically to keepers: a save/goal-conceded should also record which shot type it was against, not just field players' attempts.
 - **Milestone**: a coach can tag each recorded shot with its type, and later see stats broken down by shot type instead of only an aggregate goal/miss ratio.
+
+## Phase 11 — Multi-account switcher
+
+- Let one browser hold more than one authenticated session at once (e.g. someone who coaches two separate teams under two separate accounts, or an admin who also has their own coach account) and switch which account is active via a UI switcher, without a full logout/login cycle each time.
+- This is a session/UX convenience, not multi-team support — each account still manages exactly one team, per `OVERVIEW.md`'s non-goals; a switcher just avoids re-entering credentials to move between accounts already logged into.
+- Schema: none anticipated. Exact mechanism (e.g. multiple session cookies vs. a server-side session list) is undecided — see `OPEN_QUESTIONS.md`.
+- **Milestone**: a user can be logged in to two or more accounts simultaneously in the same browser and switch the active one from a UI switcher without re-authenticating.
