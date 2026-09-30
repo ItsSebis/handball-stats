@@ -2,49 +2,49 @@
 
 import { useActionState } from "react";
 import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { login } from "./actions";
 
 export default function LoginPage() {
   const [error, formAction, pending] = useActionState(login, undefined);
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-6 px-4">
-      <h1 className="text-2xl font-semibold tracking-tight">Anmelden</h1>
-      <form action={formAction} className="flex w-full max-w-sm flex-col gap-4">
-        <input
-          name="email"
-          type="email"
-          placeholder="E-Mail"
-          required
-          className="rounded border px-3 py-2"
-        />
-        <input
-          name="password"
-          type="password"
-          placeholder="Passwort"
-          required
-          className="rounded border px-3 py-2"
-        />
-        {error && <p className="text-sm text-red-600">{error}</p>}
-        <button
-          type="submit"
-          disabled={pending}
-          className="rounded bg-foreground px-4 py-2 text-background disabled:opacity-50"
-        >
-          {pending ? "Wird angemeldet…" : "Anmelden"}
-        </button>
-      </form>
-      <p className="text-sm">
-        <Link href="/forgot-password" className="underline">
-          Passwort vergessen?
-        </Link>
-      </p>
-      <p className="text-sm">
-        Noch kein Team?{" "}
-        <Link href="/signup" className="underline">
-          Registrieren
-        </Link>
-      </p>
+    <main className="flex min-h-screen items-center justify-center px-4">
+      <Card className="w-full max-w-sm">
+        <CardHeader>
+          <CardTitle>Anmelden</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form action={formAction} className="flex flex-col gap-4">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="email">E-Mail</Label>
+              <Input id="email" name="email" type="email" required />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="password">Passwort</Label>
+              <Input id="password" name="password" type="password" required />
+            </div>
+            {error && <p className="text-sm text-destructive">{error}</p>}
+            <Button type="submit" disabled={pending}>
+              {pending ? "Wird angemeldet…" : "Anmelden"}
+            </Button>
+          </form>
+        </CardContent>
+        <CardFooter className="flex flex-col items-start gap-2 text-sm">
+          <Link href="/forgot-password" className="underline">
+            Passwort vergessen?
+          </Link>
+          <p>
+            Noch kein Team?{" "}
+            <Link href="/signup" className="underline">
+              Registrieren
+            </Link>
+          </p>
+        </CardFooter>
+      </Card>
     </main>
   );
 }

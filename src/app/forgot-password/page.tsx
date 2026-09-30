@@ -2,36 +2,39 @@
 
 import { useActionState } from "react";
 import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { requestPasswordReset } from "./actions";
 
 export default function ForgotPasswordPage() {
   const [message, formAction, pending] = useActionState(requestPasswordReset, undefined);
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-6 px-4">
-      <h1 className="text-2xl font-semibold tracking-tight">Passwort vergessen</h1>
-      <form action={formAction} className="flex w-full max-w-sm flex-col gap-4">
-        <input
-          name="email"
-          type="email"
-          placeholder="E-Mail"
-          required
-          className="rounded border px-3 py-2"
-        />
-        {message && <p className="text-sm">{message}</p>}
-        <button
-          type="submit"
-          disabled={pending}
-          className="rounded bg-foreground px-4 py-2 text-background disabled:opacity-50"
-        >
-          {pending ? "Wird gesendet…" : "Link zum Zurücksetzen senden"}
-        </button>
-      </form>
-      <p className="text-sm">
-        <Link href="/login" className="underline">
-          Zurück zur Anmeldung
-        </Link>
-      </p>
+    <main className="flex min-h-screen items-center justify-center px-4">
+      <Card className="w-full max-w-sm">
+        <CardHeader>
+          <CardTitle>Passwort vergessen</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form action={formAction} className="flex flex-col gap-4">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="email">E-Mail</Label>
+              <Input id="email" name="email" type="email" required />
+            </div>
+            {message && <p className="text-sm">{message}</p>}
+            <Button type="submit" disabled={pending}>
+              {pending ? "Wird gesendet…" : "Link zum Zurücksetzen senden"}
+            </Button>
+          </form>
+        </CardContent>
+        <CardFooter className="text-sm">
+          <Link href="/login" className="underline">
+            Zurück zur Anmeldung
+          </Link>
+        </CardFooter>
+      </Card>
     </main>
   );
 }
