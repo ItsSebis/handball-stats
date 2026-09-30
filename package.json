@@ -9,6 +9,7 @@
     "lint": "eslint",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "node --env-file=.env.local node_modules/.bin/drizzle-kit migrate",
+    "db:seed-admin": "node --env-file=.env.local --experimental-strip-types scripts/seed-admin.ts",
     "test": "vitest run"
   },
   "dependencies": {
