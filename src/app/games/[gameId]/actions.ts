@@ -1,7 +1,8 @@
 "use server";
 
-import { and, eq, isNull, sql, type SQL } from "drizzle-orm";
+import { and, eq, isNotNull, isNull, sql, type SQL } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { gameParticipations, games, playerGameStatEvents, playerGameStats, players } from "@/db/schema";
 import { getCurrentTeam } from "@/lib/team";
@@ -281,4 +282,55 @@ export async function closeGame(_prevState: string | undefined, formData: FormDa
   }
 
   revalidatePath(`/games/${gameId}`);
+}
+
+export async function reopenGame(_prevState: string | undefined, formData: FormData) {
+  const team = await getCurrentTeam();
+  if (!team) return "Nicht angemeldet.";
+
+  const gameId = String(formData.get("gameId") ?? "");
+  if (!isUuid(gameId)) return "Ungültiges Spiel.";
+
+  let updated;
+  try {
+    updated = await db
+      .update(games)
+      .set({ ownScore: null, opponentScore: null })
+      .where(and(eq(games.id, gameId), eq(games.teamId, team.id), isNotNull(games.ownScore)))
+      .returning({ id: games.id });
+  } catch (error) {
+    console.error("reopenGame: failed to update game", error);
+    return "Spiel konnte nicht wieder geöffnet werden. Bitte erneut versuchen.";
+  }
+
+  if (updated.length === 0) {
+    return "Ungültiges Spiel oder bereits offen.";
+  }
+
+  revalidatePath(`/games/${gameId}`);
+}
+
+export async function deleteGame(_prevState: string | undefined, formData: FormData) {
+  const team = await getCurrentTeam();
+  if (!team) return "Nicht angemeldet.";
+
+  const gameId = String(formData.get("gameId") ?? "");
+  if (!isUuid(gameId)) return "Ungültiges Spiel.";
+
+  let deleted;
+  try {
+    deleted = await db
+      .delete(games)
+      .where(and(eq(games.id, gameId), eq(games.teamId, team.id)))
+      .returning({ id: games.id });
+  } catch (error) {
+    console.error("deleteGame: failed to delete game", error);
+    return "Spiel konnte nicht gelöscht werden. Bitte erneut versuchen.";
+  }
+
+  if (deleted.length === 0) {
+    return "Ungültiges Spiel.";
+  }
+
+  redirect("/games");
 }

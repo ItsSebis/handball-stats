@@ -1,10 +1,11 @@
 import { eq } from "drizzle-orm";
+import { redirect } from "next/navigation";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { games, playerGameStatEvents, playerGameStats } from "@/db/schema";
+import { gameParticipations, games, playerGameStatEvents, playerGameStats } from "@/db/schema";
 import { getCurrentTeam } from "@/lib/team";
 import { testDb, testPool } from "@/test/db";
 import { createGameFixture } from "@/test/game-fixture";
-import { recordEvent, undoEventById } from "./actions";
+import { deleteGame, recordEvent, reopenGame, undoEventById } from "./actions";
 
 vi.mock("@/db", async () => {
   const { testDb } = await import("@/test/db");
@@ -21,12 +22,19 @@ vi.mock("next/cache", () => ({
   revalidatePath: vi.fn(),
 }));
 
+// deleteGame calls redirect() on success, which throws under next/navigation's real implementation;
+// mocked here the same way src/app/reset-password/actions.test.ts mocks it.
+vi.mock("next/navigation", () => ({
+  redirect: vi.fn(),
+}));
+
 afterAll(async () => {
   await testPool.end();
 });
 
 beforeEach(() => {
   delete process.env.HIDE_DISCIPLINE_STATS;
+  vi.mocked(redirect).mockClear();
 });
 
 async function getStatsRow(gameParticipationId: string) {
@@ -192,5 +200,104 @@ describe("recordEvent / undoEventById", () => {
       ok: false,
       reason: "not_writable",
     });
+  });
+});
+
+function formData(fields: Record<string, string>) {
+  const data = new FormData();
+  for (const [key, value] of Object.entries(fields)) data.set(key, value);
+  return data;
+}
+
+describe("reopenGame", () => {
+  it("clears both scores and lets recordEvent succeed again afterward", async () => {
+    const fixture = await createGameFixture();
+    vi.mocked(getCurrentTeam).mockResolvedValue(fixture.team);
+
+    await testDb.update(games).set({ ownScore: 10, opponentScore: 5 }).where(eq(games.id, fixture.game.id));
+
+    const result = await reopenGame(undefined, formData({ gameId: fixture.game.id }));
+    expect(result).toBeUndefined();
+
+    const [reopened] = await testDb.select().from(games).where(eq(games.id, fixture.game.id));
+    expect(reopened?.ownScore).toBeNull();
+    expect(reopened?.opponentScore).toBeNull();
+
+    // The real regression risk: blockedReason() derives write-blocking purely from ownScore/
+    // opponentScore being null, so reopening must re-enable recordEvent with zero extra plumbing.
+    const recorded = await recordEvent(fixture.fieldParticipationId, "SHOT_REGULAR_GOAL");
+    expect(recorded.ok).toBe(true);
+  });
+
+  it("rejects reopening a game that was never closed and makes no DB change", async () => {
+    const fixture = await createGameFixture();
+    vi.mocked(getCurrentTeam).mockResolvedValue(fixture.team);
+
+    const result = await reopenGame(undefined, formData({ gameId: fixture.game.id }));
+    expect(result).toBe("Ungültiges Spiel oder bereits offen.");
+
+    const [unchanged] = await testDb.select().from(games).where(eq(games.id, fixture.game.id));
+    expect(unchanged?.ownScore).toBeNull();
+    expect(unchanged?.opponentScore).toBeNull();
+  });
+});
+
+describe("deleteGame", () => {
+  it("deletes the game and cascades to participations, stats, and the event log", async () => {
+    const fixture = await createGameFixture();
+    vi.mocked(getCurrentTeam).mockResolvedValue(fixture.team);
+
+    const recorded = await recordEvent(fixture.fieldParticipationId, "SHOT_REGULAR_GOAL");
+    if (!recorded.ok) throw new Error("unreachable");
+
+    const result = await deleteGame(undefined, formData({ gameId: fixture.game.id }));
+    expect(result).toBeUndefined();
+    expect(redirect).toHaveBeenCalledWith("/games");
+
+    const [remainingGame] = await testDb.select().from(games).where(eq(games.id, fixture.game.id));
+    expect(remainingGame).toBeUndefined();
+
+    const remainingParticipations = await testDb
+      .select()
+      .from(gameParticipations)
+      .where(eq(gameParticipations.gameId, fixture.game.id));
+    expect(remainingParticipations).toHaveLength(0);
+
+    const remainingStats = await testDb
+      .select()
+      .from(playerGameStats)
+      .where(eq(playerGameStats.gameParticipationId, fixture.fieldParticipationId));
+    expect(remainingStats).toHaveLength(0);
+
+    const remainingEvents = await testDb
+      .select()
+      .from(playerGameStatEvents)
+      .where(eq(playerGameStatEvents.gameParticipationId, fixture.fieldParticipationId));
+    expect(remainingEvents).toHaveLength(0);
+  });
+
+  it("rejects a game belonging to a different team and leaves all rows untouched", async () => {
+    const fixture = await createGameFixture();
+    const otherFixture = await createGameFixture();
+    vi.mocked(getCurrentTeam).mockResolvedValue(otherFixture.team);
+
+    const result = await deleteGame(undefined, formData({ gameId: fixture.game.id }));
+    expect(result).toBe("Ungültiges Spiel.");
+    expect(redirect).not.toHaveBeenCalled();
+
+    const [stillThere] = await testDb.select().from(games).where(eq(games.id, fixture.game.id));
+    expect(stillThere).toBeDefined();
+  });
+
+  it("rejects a nonexistent gameId and leaves all rows untouched", async () => {
+    const fixture = await createGameFixture();
+    vi.mocked(getCurrentTeam).mockResolvedValue(fixture.team);
+
+    const result = await deleteGame(undefined, formData({ gameId: "00000000-0000-0000-0000-000000000000" }));
+    expect(result).toBe("Ungültiges Spiel.");
+    expect(redirect).not.toHaveBeenCalled();
+
+    const [stillThere] = await testDb.select().from(games).where(eq(games.id, fixture.game.id));
+    expect(stillThere).toBeDefined();
   });
 });

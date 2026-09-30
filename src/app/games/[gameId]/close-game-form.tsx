@@ -65,7 +65,9 @@ export function CloseGameForm({ gameId }: { gameId: string }) {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Spiel wirklich beenden?</AlertDialogTitle>
-            <AlertDialogDescription>Das kann nicht rückgängig gemacht werden.</AlertDialogDescription>
+            <AlertDialogDescription>
+              Der Endstand kann danach nur noch über &quot;Spiel wieder öffnen&quot; geändert werden.
+            </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Abbrechen</AlertDialogCancel>

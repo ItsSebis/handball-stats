@@ -9,8 +9,10 @@ import { isUuid } from "@/lib/uuid";
 import { getGameTally } from "../queries";
 import { TallyTable } from "../tally-table";
 import { CloseGameForm } from "./close-game-form";
+import { DeleteGameForm } from "./delete-game-form";
 import { EventLog, type GameEventLogEntry } from "./event-log";
 import { LiveGameView } from "./live-game-view";
+import { ReopenGameForm } from "./reopen-game-form";
 
 export default async function GameDetailPage({ params }: { params: Promise<{ gameId: string }> }) {
   const team = await getCurrentTeam();
@@ -59,7 +61,12 @@ export default async function GameDetailPage({ params }: { params: Promise<{ gam
         title={game.opponentName}
         description={`${game.date} · ${game.seasonLabel}`}
         backHref="/games"
-        actions={isClosed ? <Badge>{`${game.ownScore}:${game.opponentScore}`}</Badge> : undefined}
+        actions={
+          <>
+            {isClosed && <Badge>{`${game.ownScore}:${game.opponentScore}`}</Badge>}
+            <DeleteGameForm gameId={game.id} />
+          </>
+        }
       />
 
       <div className="flex w-full flex-1 flex-col items-center gap-6 px-4 py-4">
@@ -72,6 +79,7 @@ export default async function GameDetailPage({ params }: { params: Promise<{ gam
                 <EventLog entries={eventLog} />
               </div>
             </details>
+            <ReopenGameForm gameId={game.id} />
           </div>
         ) : (
           <>
