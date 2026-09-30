@@ -4,6 +4,8 @@ import { eq } from "drizzle-orm";
 import { signIn } from "@/auth";
 import { db } from "@/db";
 import { teams, users } from "@/db/schema";
+import { createAuthToken } from "@/lib/auth-token";
+import { sendVerificationEmail } from "@/lib/email";
 import { hashPassword } from "@/lib/password";
 
 const UNIQUE_VIOLATION = "23505";
@@ -44,6 +46,16 @@ export async function signup(_prevState: string | undefined, formData: FormData)
     console.error("signup: failed to insert team, rolling back user", error);
     await db.delete(users).where(eq(users.id, userId));
     return "Team konnte nicht erstellt werden. Bitte erneut versuchen.";
+  }
+
+  // Best-effort: verification is informational only (see docs/OPEN_QUESTIONS.md), so a failure
+  // to create the token shouldn't stop the new coach from being signed in. sendVerificationEmail
+  // itself never throws (see src/lib/email.ts), so this only ever guards createAuthToken.
+  try {
+    const verificationToken = await createAuthToken(userId, "EMAIL_VERIFICATION");
+    await sendVerificationEmail(email, verificationToken);
+  } catch (error) {
+    console.error("signup: failed to issue verification token", error);
   }
 
   await signIn("credentials", { email, password, redirectTo: "/dashboard" });

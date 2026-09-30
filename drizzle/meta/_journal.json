@@ -43,6 +43,13 @@
       "when": 1790776260715,
       "tag": "0005_acoustic_nico_minoru",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790783033822,
+      "tag": "0006_huge_wilson_fisk",
+      "breakpoints": true
     }
   ]
 }
