@@ -73,13 +73,27 @@ Only after phases 0–6 are solid and in real use. Resolve items from `OPEN_QUES
 - "Forgot password" flow: coach requests a reset email, follows a single-use link, sets a new password.
 - **Milestone**: a coach receives a real confirmation email on signup, and can self-serve a password reset by email without the admin's help — the admin-driven reset from Phase 8 remains as a fallback.
 
-## Phase 10 — Detailed shot-type tracking
+## Phase 10 — Site-wide design rework, home page, settings, game delete/reopen
+
+Only after Phase 9 is solid and in real use. The live game view (`games/[gameId]`) and the stats page are the app's most visually developed screens — shared `PageHeader`, shadcn `Table`/`Card`/`Badge`/`Button`/`AlertDialog`. Everything else (dashboard, roster, seasons, the games list, and every auth page including the two Phase 9 just added) is still plain `<ul>`/`<li>` lists or hand-rolled `<input>`/`<button>` markup. This phase brings the rest of the app up to that same visual language, and adds the account/game-management pieces a coach is missing:
+
+- Visual rework of dashboard, roster, seasons, games list, login, signup, forgot-password, reset-password, and admin login to use the established shadcn primitives instead of plain markup. Adding `input`/`label` (`npx shadcn add`) will likely be needed for the auth pages — record that in `ARCHITECTURE.md` when it happens, per the root `CLAUDE.md`'s "check ARCHITECTURE.md before adding a dependency" rule.
+- Home page (`dashboard`) redesign, replacing today's bare nav-link list with an at-a-glance overview:
+  - An all-time leaderboard (top scorers by goals, top keepers by saves) — reuses the existing all-time aggregate query (`stats/queries.ts`'s `getPlayerStats`), no new aggregation logic needed.
+  - The most recent game's result and per-player goals/saves tally, picked by `date` (not insertion order/id) — mirrors the ordering the games list page already uses.
+  - Season/roster/games navigation stays reachable from here, just no longer as the entire page.
+- Settings page: self-service password change and email change while signed in (distinct from Phase 9's forgot-password reset flow, which is for a locked-out coach). Exact behavior for email change — whether it requires confirming the current password, and whether it takes effect immediately (informational re-verify, matching Phase 9's decision) or only once the new address is confirmed — is undecided; see `OPEN_QUESTIONS.md`.
+- Game delete, with an `AlertDialog` confirmation (same pattern as the existing close-game confirmation). A game's participations/stats/event log all cascade-delete already (`onDelete: "cascade"` throughout `src/db/schema.ts`) — no schema change needed.
+- Game reopen: a closed game (`ownScore`/`opponentScore` both set) currently can never be edited again. Add a `reopenGame` action (clears both scores, symmetric to the existing `closeGame`) and a reopen control on a closed game's page. The existing close-game confirmation's copy ("kann nicht rückgängig gemacht werden") needs updating once this ships, since closing is no longer actually irreversible.
+- **Milestone**: every page shares one consistent visual language, the home page surfaces real at-a-glance stats instead of a bare nav list, and a coach can change their password/email and delete or reopen a game, all from the UI.
+
+## Phase 11 — Detailed shot-type tracking
 
 - Extend live stat entry (Phase 4) beyond a plain goal/miss per attempt to also capture *how* the shot was taken: e.g. Durchbruch (breakthrough), Sprungwurf/Rückraum, Außen (wing), Kreis (pivot/6m), über die Abwehr (over the defense), 6m frei (ohne Gegnereinwirkung), Schlagwurf, Gegenstoß/Tempogegenstoß — a starting list; finalize the exact taxonomy when this phase is planned (see `OPEN_QUESTIONS.md`).
 - Applies symmetrically to keepers: a save/goal-conceded should also record which shot type it was against, not just field players' attempts.
 - **Milestone**: a coach can tag each recorded shot with its type, and later see stats broken down by shot type instead of only an aggregate goal/miss ratio.
 
-## Phase 11 — Multi-account switcher
+## Phase 12 — Multi-account switcher
 
 - Let one browser hold more than one authenticated session at once (e.g. someone who coaches two separate teams under two separate accounts, or an admin who also has their own coach account) and switch which account is active via a UI switcher, without a full logout/login cycle each time.
 - This is a session/UX convenience, not multi-team support — each account still manages exactly one team, per `OVERVIEW.md`'s non-goals; a switcher just avoids re-entering credentials to move between accounts already logged into.

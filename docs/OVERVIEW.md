@@ -19,6 +19,5 @@ These are explicitly out of scope unless the user asks for them later — do not
 - No live spectator/public view of a game in progress.
 - No multi-coach collaboration on the same team (single account per team).
 - No push notifications.
-- No password-reset flow yet (see `OPEN_QUESTIONS.md`).
 
 See `DATA_MODEL.md` for entities, `FEATURES.md` for feature specs, `STATS.md` for the exact stat formulas, `ARCHITECTURE.md` for the technical stack, and `ROADMAP.md` for build order.
